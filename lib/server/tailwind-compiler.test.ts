@@ -2,6 +2,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { compileTailwindCss, EMPTY_CSS_PLACEHOLDER } from '@/lib/server/tailwind-compiler';
 
+/**
+ * Assemble a class candidate from fragments so the app's own Tailwind build,
+ * which scans every source file for class-like strings, ignores these fixtures.
+ */
+const candidate = (...parts: string[]): string => parts.join('');
+
 /** Count rules in a compiled stylesheet whose declaration block is missing a `]` or `)`. */
 function unbalancedDeclarationBlocks(css: string): number {
   let count = 0;
@@ -15,7 +21,7 @@ function unbalancedDeclarationBlocks(css: string): number {
 }
 
 test('each build contains only the candidates it was given', async () => {
-  const first = await compileTailwindCss(['flex', 'text-[60px]']);
+  const first = await compileTailwindCss(['flex', candidate('text-', '[60px]')]);
   assert.match(first, /\.flex\s*\{/);
   assert.match(first, /\.text-\\\[60px\\\]\s*\{/);
 
@@ -29,9 +35,9 @@ test('each build contains only the candidates it was given', async () => {
 test('malformed candidates are dropped instead of truncating the stylesheet', async () => {
   const css = await compileTailwindCss([
     'flex',
-    'ml-[12 mr-[12 rem] pb-[0rem] pt-[1rem]',
-    'shadow-[0px_4px_10px_0px_rgba(0_0]',
-    'text-[60px]',
+    candidate('ml-', '[12 mr-[12 rem] pb-', '[0rem] pt-', '[1rem]'),
+    candidate('shadow-', '[0px_4px_10px_0px_rgba(0_0]'),
+    candidate('text-', '[60px]'),
   ]);
   assert.match(css, /\.flex\s*\{/);
   assert.match(css, /\.text-\\\[60px\\\]\s*\{/);
@@ -41,5 +47,5 @@ test('malformed candidates are dropped instead of truncating the stylesheet', as
 
 test('returns a placeholder when nothing compilable remains', async () => {
   assert.equal(await compileTailwindCss([]), EMPTY_CSS_PLACEHOLDER);
-  assert.equal(await compileTailwindCss(['ml-[12']), EMPTY_CSS_PLACEHOLDER);
+  assert.equal(await compileTailwindCss([candidate('ml-', '[12')]), EMPTY_CSS_PLACEHOLDER);
 });
