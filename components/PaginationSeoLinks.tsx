@@ -1,6 +1,6 @@
 import {
   buildCanonicalPaginationQueryString,
-  buildPaginationQueryString,
+  buildPaginationLinkAttrs,
   findPrimaryPaginatedCollection,
 } from '@/lib/pagination-url-utils';
 import { buildAbsolutePageUrl } from '@/lib/url-utils';
@@ -32,27 +32,29 @@ export default function PaginationSeoLinks({
 
   if (!primary) return null;
 
-  const { collectionLayerId, meta } = primary;
-  const canonicalQuery = buildCanonicalPaginationQueryString(layers, queryString || '');
-
-  const urlForPage = (page: number): string => {
-    const query = buildPaginationQueryString({ queryString: canonicalQuery, collectionLayerId, page });
-    const path = baseUrl ? buildAbsolutePageUrl(baseUrl, basePath) : basePath;
-    return query ? `${path}?${query}` : path;
+  // Same boundary rules as the on-page controls, so an out-of-range request
+  // never advertises a neighbour page that doesn't exist.
+  const linkOptions = {
+    meta: primary.meta,
+    collectionLayerId: primary.collectionLayerId,
+    basePath: baseUrl ? buildAbsolutePageUrl(baseUrl, basePath) : basePath,
+    queryString: buildCanonicalPaginationQueryString(layers, queryString || ''),
   };
+  const prev = buildPaginationLinkAttrs({ ...linkOptions, direction: 'prev' });
+  const next = buildPaginationLinkAttrs({ ...linkOptions, direction: 'next' });
 
   return (
     <>
-      {meta.currentPage > 1 && (
+      {prev && (
         <link
-          rel="prev"
-          href={urlForPage(meta.currentPage - 1)}
+          rel={prev.rel}
+          href={prev.href}
         />
       )}
-      {meta.currentPage < meta.totalPages && (
+      {next && (
         <link
-          rel="next"
-          href={urlForPage(meta.currentPage + 1)}
+          rel={next.rel}
+          href={next.href}
         />
       )}
     </>

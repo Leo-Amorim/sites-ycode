@@ -101,6 +101,11 @@ test('buildPaginationLinkAttrs links only where a target page exists', () => {
   assert.equal(buildPaginationLinkAttrs({ ...base, direction: 'prev', meta: firstPage }), null);
   assert.equal(buildPaginationLinkAttrs({ ...base, direction: 'next', meta: lastPage }), null);
 
+  // An out-of-range request must not advertise another out-of-range page
+  const beyondLast = meta({ currentPage: 11, totalPages: 4, totalItems: 40 });
+  assert.equal(buildPaginationLinkAttrs({ ...base, direction: 'prev', meta: beyondLast }), null);
+  assert.equal(buildPaginationLinkAttrs({ ...base, direction: 'next', meta: beyondLast }), null);
+
   // Load-more mode, empty results and a missing request path keep buttons too
   assert.equal(
     buildPaginationLinkAttrs({ ...base, direction: 'next', meta: meta({ ...paged, mode: 'load_more' }) }),
