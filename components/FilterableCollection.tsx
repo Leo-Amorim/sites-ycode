@@ -5,6 +5,7 @@ import { useFilterStore } from '@/stores/useFilterStore';
 import { LOAD_MORE_APPENDED_ATTR } from '@/components/LoadMoreCollection';
 import { hasDynamicDateRule } from '@/lib/collection-field-utils';
 import { resolvePaginationString } from '@/lib/pagination-text-utils';
+import { filteredPaginationParamKey, paginationParamKey } from '@/lib/pagination-url-utils';
 import type { ConditionalVisibility, Layer } from '@/types';
 
 interface FilterableCollectionProps {
@@ -155,11 +156,8 @@ export default function FilterableCollection({
   const ssrWrapperHadHiddenRef = useRef<boolean | null>(null);
   const strippedPaginationParamRef = useRef(false);
 
-  const strippedId = collectionLayerId.startsWith('lyr-')
-    ? collectionLayerId.slice(4)
-    : collectionLayerId;
-  const pKey = `p_${strippedId}`;
-  const fpKey = `fp_${strippedId}`;
+  const pKey = paginationParamKey(collectionLayerId);
+  const fpKey = filteredPaginationParamKey(collectionLayerId);
 
   // --- DOM helpers: find parent collection layer, hide/show SSR children ---
 

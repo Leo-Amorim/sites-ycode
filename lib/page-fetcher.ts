@@ -26,6 +26,11 @@ export interface PaginationContext {
   pageNumbers?: Record<string, number>;
   // Default page number for all collection layers (from URL ?page=N)
   defaultPage?: number;
+  // Public path of the current request (`/news`). Required to server-render
+  // crawlable pagination links; omitted (e.g. in the editor) they stay buttons.
+  basePath?: string;
+  // Current query string, whose other params pagination links preserve
+  queryString?: string;
 }
 
 import { resolveRefCollectionItemId, generateLinkHref, isLinkAtCollectionBoundary, isLinkToCurrentPage, parseCollectionLinkValue, extractCrossCollectionItemIds } from '@/lib/link-utils';
@@ -34,6 +39,7 @@ import { getLinkSettingsFromMark } from '@/lib/tiptap-extensions/link-settings';
 import { SWIPER_CLASS_MAP, SWIPER_DATA_ATTR_MAP, SLIDER_BUTTON_ARIA_LABELS, isSliderChromeButton } from '@/lib/slider-constants';
 import { resolveInlineVariables, resolveInlineVariablesFromData } from '@/lib/inline-variables';
 import { buildPaginationNumbers, getPaginationLayerKind, hasPaginationVariables, paginationTextVariableToTemplate, resolvePaginationTextVariable } from '@/lib/pagination-text-utils';
+import { buildPaginationLinkAttrs, collectPaginationMeta } from '@/lib/pagination-url-utils';
 import { formatFieldValue, resolveFieldFromSources } from '@/lib/cms-variables-utils';
 import { buildLayerTranslationKey, getTranslationByKey, hasValidTranslationValue, getTranslationValue, injectTranslatedText, applyCmsTranslations, translateComponentOverrides } from '@/lib/localisation-utils';
 import { formatDateFieldsInItemValues } from '@/lib/date-format-utils';
@@ -3217,19 +3223,7 @@ export async function resolveCollectionLayers(
   const result = await Promise.all(layers.map(layer => resolveLayer(layer, parentItemValues, initialLayerDataMap, parentCollectionItemId)));
 
   // Collect pagination metadata from all fragments
-  const paginationMetaMap: Record<string, CollectionPaginationMeta> = {};
-  function collectPaginationMeta(layerList: Layer[]) {
-    for (const layer of layerList) {
-      if (layer._paginationMeta) {
-        const originalId = layer.id.replace('-fragment', '');
-        paginationMetaMap[originalId] = layer._paginationMeta;
-      }
-      if (layer.children) {
-        collectPaginationMeta(layer.children);
-      }
-    }
-  }
-  collectPaginationMeta(result);
+  const paginationMetaMap = collectPaginationMeta(result);
 
   // Update pagination sibling layers with correct meta
   function updatePaginationSiblings(layerList: Layer[]): Layer[] {
@@ -3238,7 +3232,7 @@ export async function resolveCollectionLayers(
       const paginationFor = layer.attributes?.['data-pagination-for'];
       if (paginationFor && paginationMetaMap[paginationFor]) {
         // Update this pagination layer with the meta
-        return updatePaginationLayerWithMeta(layer, paginationMetaMap[paginationFor]);
+        return updatePaginationLayerWithMeta(layer, paginationMetaMap[paginationFor], String(paginationFor), paginationContext);
       }
 
       // Recursively update children
@@ -3491,9 +3485,16 @@ function filterByVisibility(
  * Update a pagination layer with dynamic meta (page info text, button states)
  * @param layer - The pagination layer to update
  * @param meta - Pagination metadata
+ * @param collectionLayerId - Collection the controls paginate
+ * @param paginationContext - Request context supplying the URL to link to
  * @returns Updated layer with dynamic content
  */
-function updatePaginationLayerWithMeta(layer: Layer, meta: CollectionPaginationMeta): Layer {
+function updatePaginationLayerWithMeta(
+  layer: Layer,
+  meta: CollectionPaginationMeta,
+  collectionLayerId: string,
+  paginationContext?: PaginationContext,
+): Layer {
   const { currentPage, totalPages, totalItems, itemsPerPage, mode } = meta;
 
   // Deep clone to avoid mutation
@@ -3508,6 +3509,27 @@ function updatePaginationLayerWithMeta(layer: Layer, meta: CollectionPaginationM
   }
 
   const numbers = buildPaginationNumbers(meta);
+
+  /**
+   * Render a prev/next control as a real `<a href>` so crawlers can follow it.
+   * The client runtime still intercepts plain clicks for the loading state.
+   */
+  function applyPaginationLink(l: Layer, direction: 'prev' | 'next'): void {
+    const link = buildPaginationLinkAttrs({
+      direction,
+      meta,
+      collectionLayerId,
+      basePath: paginationContext?.basePath,
+      queryString: paginationContext?.queryString,
+    });
+
+    if (!link) return;
+
+    l.settings = { ...l.settings, tag: link.tag };
+    l.attributes = l.attributes || {};
+    l.attributes.href = link.href;
+    l.attributes.rel = link.rel;
+  }
 
   // Helper to recursively update layers
   function updateLayerRecursive(l: Layer): void {
@@ -3547,6 +3569,8 @@ function updatePaginationLayerWithMeta(layer: Layer, meta: CollectionPaginationM
         l.classes = Array.isArray(l.classes)
           ? [...l.classes, 'opacity-50', 'cursor-not-allowed']
           : `${l.classes || ''} opacity-50 cursor-not-allowed`;
+      } else {
+        applyPaginationLink(l, 'prev');
       }
     }
 
@@ -3560,6 +3584,8 @@ function updatePaginationLayerWithMeta(layer: Layer, meta: CollectionPaginationM
         l.classes = Array.isArray(l.classes)
           ? [...l.classes, 'opacity-50', 'cursor-not-allowed']
           : `${l.classes || ''} opacity-50 cursor-not-allowed`;
+      } else {
+        applyPaginationLink(l, 'next');
       }
     }
 
