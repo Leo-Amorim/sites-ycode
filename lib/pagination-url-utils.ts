@@ -78,6 +78,14 @@ export function buildPaginationQueryString({
   const params = new URLSearchParams(queryString || '');
   const key = paginationParamKey(collectionLayerId, paramName);
 
+  // Drop the layer-id form so a link never carries both it and the configured
+  // name — arriving on a URL indexed before the rename would otherwise keep
+  // the stale param around for the rest of the session.
+  const legacyKey = paginationParamKey(collectionLayerId);
+  if (legacyKey !== key) {
+    params.delete(legacyKey);
+  }
+
   if (page <= 1) {
     params.delete(key);
   } else {
@@ -154,7 +162,9 @@ export function buildCanonicalPaginationQueryString(layers: Layer[], queryString
 
   for (const [layerId, meta] of Object.entries(collectPaginationMeta(layers))) {
     const key = paginationParamKey(layerId, meta.paramName);
-    const page = Number(requested.get(key));
+    // Accept the layer-id form too, so a URL indexed before a name was set
+    // canonicalizes to the page it actually shows rather than back to page 1.
+    const page = Number(requested.get(key) ?? requested.get(paginationParamKey(layerId)));
 
     if (!Number.isInteger(page) || page < 2 || page > meta.totalPages) continue;
 

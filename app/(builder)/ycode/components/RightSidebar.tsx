@@ -102,7 +102,7 @@ import { resolveLayerClasses, chipClasses } from '@/lib/layer-style-resolve';
 import { buildDesign } from '@/lib/import/design';
 import { cn } from '@/lib/utils';
 import { isFieldVariable, getCollectionVariable, findParentCollectionLayer, findAllParentCollectionLayers, isTextEditable, isTextContentLayer, isRichTextLayer, isHeadingLayer, findLayerWithParent, resetBindingsOnCollectionSourceChange, isInputInsideFilter, resolveFilterInputId, getLayerIndexes, indexedFindLayerById, indexedFindLayerWithParent, indexedFindParentCollectionLayer } from '@/lib/layer-utils';
-import { paginationParamKey, sanitizePaginationParamName, stripLayerPrefix } from '@/lib/pagination-url-utils';
+import { sanitizePaginationParamName, stripLayerPrefix } from '@/lib/pagination-url-utils';
 import { detachSpecificLayerFromComponent } from '@/lib/component-utils';
 import { convertContentToValue, parseValueToContent } from '@/lib/cms-variables-utils';
 import { defaultPaginationCountDoc, defaultPaginationInfoDoc } from '@/lib/pagination-text-utils';
@@ -3036,16 +3036,20 @@ const RightSidebar = React.memo(function RightSidebar({
                           </div>
                           {getCollectionVariable(selectedLayer)?.pagination?.mode !== 'load_more' && (
                             <div className="grid grid-cols-3">
-                              <Label variant="muted">URL parameter</Label>
+                              <Label variant="muted">URL param</Label>
                               <div className="col-span-2 *:w-full">
-                                <Input
-                                  value={getCollectionVariable(selectedLayer)?.pagination?.param_name ?? ''}
-                                  placeholder={stripLayerPrefix(selectedLayer.id)}
-                                  onChange={(e) => handlePaginationParamNameChange(e.target.value)}
-                                />
-                                <p className="text-xs text-muted-foreground mt-1">
-                                  {`Page 2 will be ?${paginationParamKey(selectedLayer.id, getCollectionVariable(selectedLayer)?.pagination?.param_name)}=2`}
-                                </p>
+                                <div className="relative">
+                                  <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                                    p_
+                                  </span>
+                                  <Input
+                                    className="pl-[26px]"
+                                    value={getCollectionVariable(selectedLayer)?.pagination?.param_name ?? ''}
+                                    placeholder={stripLayerPrefix(selectedLayer.id)}
+                                    onChange={(e) => handlePaginationParamNameChange(e.target.value)}
+                                    disableKeyboardStep
+                                  />
+                                </div>
                               </div>
                             </div>
                           )}

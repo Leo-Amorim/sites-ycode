@@ -45,6 +45,28 @@ test('a configured param name replaces the layer id, sanitized', () => {
   );
 });
 
+test('a renamed param supersedes the layer-id form in links and canonicals', () => {
+  // Arriving on a URL indexed before the rename must not carry both forms on
+  const href = buildPaginationHref({
+    basePath: '/news',
+    queryString: 'p_abc123=2&utm_source=x',
+    collectionLayerId: 'lyr-abc123',
+    page: 3,
+    paramName: 'news',
+  });
+  assert.equal(href, '/news?utm_source=x&p_news=3');
+
+  // ...and it canonicalizes to the page it shows, under the configured name
+  const layers = [fragment('lyr-abc123-fragment', meta({
+    currentPage: 2,
+    totalPages: 4,
+    totalItems: 40,
+    paramName: 'news',
+  }))];
+  assert.equal(buildCanonicalPaginationQueryString(layers, 'p_abc123=2'), 'p_news=2');
+  assert.equal(buildCanonicalPaginationQueryString(layers, 'p_news=2'), 'p_news=2');
+});
+
 test('resolveCurrentPage accepts the configured name and the legacy layer id', () => {
   const pageNumbers = { news: 4, 'lyr-abc': 2, abc: 2 };
 
