@@ -26,6 +26,8 @@ interface FilterableCollectionProps {
    * way SSR does. */
   baseOffset?: number;
   paginationMode?: 'pages' | 'load_more';
+  /** Configured page param suffix, when the collection has one. */
+  paginationParamName?: string;
   layerTemplate: Layer[];
   collectionLayerClasses?: string[];
   collectionLayerTag?: string;
@@ -107,6 +109,7 @@ export default function FilterableCollection({
   maxTotal,
   baseOffset,
   paginationMode,
+  paginationParamName,
   layerTemplate,
   collectionLayerClasses,
   collectionLayerTag,
@@ -156,8 +159,8 @@ export default function FilterableCollection({
   const ssrWrapperHadHiddenRef = useRef<boolean | null>(null);
   const strippedPaginationParamRef = useRef(false);
 
-  const pKey = paginationParamKey(collectionLayerId);
-  const fpKey = filteredPaginationParamKey(collectionLayerId);
+  const pKey = paginationParamKey(collectionLayerId, paginationParamName);
+  const fpKey = filteredPaginationParamKey(collectionLayerId, paginationParamName);
 
   // --- DOM helpers: find parent collection layer, hide/show SSR children ---
 

@@ -39,7 +39,7 @@ import { getLinkSettingsFromMark } from '@/lib/tiptap-extensions/link-settings';
 import { SWIPER_CLASS_MAP, SWIPER_DATA_ATTR_MAP, SLIDER_BUTTON_ARIA_LABELS, isSliderChromeButton } from '@/lib/slider-constants';
 import { resolveInlineVariables, resolveInlineVariablesFromData } from '@/lib/inline-variables';
 import { buildPaginationNumbers, getPaginationLayerKind, hasPaginationVariables, paginationTextVariableToTemplate, resolvePaginationTextVariable } from '@/lib/pagination-text-utils';
-import { buildPaginationLinkAttrs, collectPaginationMeta } from '@/lib/pagination-url-utils';
+import { buildPaginationLinkAttrs, collectPaginationMeta, resolveCurrentPage } from '@/lib/pagination-url-utils';
 import { formatFieldValue, resolveFieldFromSources } from '@/lib/cms-variables-utils';
 import { buildLayerTranslationKey, getTranslationByKey, hasValidTranslationValue, getTranslationValue, injectTranslatedText, applyCmsTranslations, translateComponentOverrides } from '@/lib/localisation-utils';
 import { formatDateFieldsInItemValues } from '@/lib/date-format-utils';
@@ -2544,7 +2544,7 @@ export async function resolveCollectionLayers(
             let multiAssetCurrentPage = 1;
             if (isMultiAssetPaginated) {
               const itemsPerPage = multiAssetPagination!.items_per_page || 10;
-              multiAssetCurrentPage = paginationContext?.pageNumbers?.[layer.id]
+              multiAssetCurrentPage = resolveCurrentPage(paginationContext?.pageNumbers, layer.id, multiAssetPagination!.param_name)
                 ?? paginationContext?.defaultPage
                 ?? 1;
               multiAssetLimit = itemsPerPage;
@@ -2665,6 +2665,7 @@ export async function resolveCollectionLayers(
                 layerId: layer.id,
                 collectionId: collectionVariable.id,
                 mode: multiAssetPagination.mode,
+                paramName: multiAssetPagination.param_name,
                 itemIds: assetIds,
                 isPublished,
                 // No sort: multi-asset order is the image order in the field.
@@ -2710,7 +2711,7 @@ export async function resolveCollectionLayers(
           if (isPaginated) {
             const itemsPerPage = paginationConfig.items_per_page || 10;
             // Get page number from context (either specific to this layer or default)
-            currentPage = paginationContext?.pageNumbers?.[layer.id]
+            currentPage = resolveCurrentPage(paginationContext?.pageNumbers, layer.id, paginationConfig.param_name)
               ?? paginationContext?.defaultPage
               ?? 1;
             limit = itemsPerPage;
@@ -2947,6 +2948,7 @@ export async function resolveCollectionLayers(
               layerId: layer.id,
               collectionId: collectionVariable.id,
               mode: paginationConfig.mode, // 'pages' or 'load_more'
+              paramName: paginationConfig.param_name,
               itemIds: allowedItemIds, // For multi-reference filtering in load_more
               // Store the original layer template for load_more client-side rendering
               layerTemplate: paginationConfig.mode === 'load_more' ? layer.children : undefined,
@@ -3002,6 +3004,7 @@ export async function resolveCollectionLayers(
               maxTotal,
               baseOffset,
               paginationMode: isPaginated ? paginationConfig.mode : undefined,
+              paginationParamName: isPaginated ? paginationConfig.param_name : undefined,
               layerTemplate: layer.children || [],
               collectionLayerClasses: Array.isArray(layer.classes) ? layer.classes : (layer.classes ? [layer.classes] : []),
               collectionLayerTag: layer.name || 'div',

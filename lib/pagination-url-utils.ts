@@ -16,14 +16,43 @@ export function stripLayerPrefix(id: string): string {
   return id.startsWith('lyr-') ? id.slice(4) : id;
 }
 
+/**
+ * Keep a configured param name usable in a URL. Returns an empty string when
+ * nothing usable is left, so callers fall back to the layer id.
+ */
+export function sanitizePaginationParamName(name?: string | null): string {
+  return (name || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
+}
+
+/** Param suffix for a collection: its configured name, else its layer id. */
+function paramSuffix(layerId: string, paramName?: string): string {
+  return sanitizePaginationParamName(paramName) || stripLayerPrefix(layerId);
+}
+
 /** Query param carrying a collection layer's current page. */
-export function paginationParamKey(layerId: string): string {
-  return `p_${stripLayerPrefix(layerId)}`;
+export function paginationParamKey(layerId: string, paramName?: string): string {
+  return `p_${paramSuffix(layerId, paramName)}`;
 }
 
 /** Query param carrying a collection layer's current page while filtered. */
-export function filteredPaginationParamKey(layerId: string): string {
-  return `fp_${stripLayerPrefix(layerId)}`;
+export function filteredPaginationParamKey(layerId: string, paramName?: string): string {
+  return `fp_${paramSuffix(layerId, paramName)}`;
+}
+
+/**
+ * Current page for a collection from the request's parsed page numbers.
+ * Accepts the configured param name and the layer id, so URLs indexed before
+ * a name was set (or changed) still resolve to the right page.
+ */
+export function resolveCurrentPage(
+  pageNumbers: Record<string, number> | undefined,
+  layerId: string,
+  paramName?: string
+): number | undefined {
+  if (!pageNumbers) return undefined;
+
+  const custom = sanitizePaginationParamName(paramName);
+  return (custom ? pageNumbers[custom] : undefined) ?? pageNumbers[layerId];
 }
 
 interface PaginationQueryOptions {
@@ -31,6 +60,8 @@ interface PaginationQueryOptions {
   queryString?: string;
   collectionLayerId: string;
   page: number;
+  /** Configured param name, when the collection has one. */
+  paramName?: string;
 }
 
 /**
@@ -42,9 +73,10 @@ export function buildPaginationQueryString({
   queryString,
   collectionLayerId,
   page,
+  paramName,
 }: PaginationQueryOptions): string {
   const params = new URLSearchParams(queryString || '');
-  const key = paginationParamKey(collectionLayerId);
+  const key = paginationParamKey(collectionLayerId, paramName);
 
   if (page <= 1) {
     params.delete(key);
@@ -70,7 +102,7 @@ export function buildPaginationHref(
  */
 export function buildPaginationLinkAttrs(options: {
   direction: 'prev' | 'next';
-  meta: Pick<CollectionPaginationMeta, 'currentPage' | 'totalPages' | 'totalItems' | 'mode'>;
+  meta: Pick<CollectionPaginationMeta, 'currentPage' | 'totalPages' | 'totalItems' | 'mode' | 'paramName'>;
   collectionLayerId: string;
   basePath?: string;
   queryString?: string;
@@ -85,7 +117,7 @@ export function buildPaginationLinkAttrs(options: {
 
   return {
     tag: 'a',
-    href: buildPaginationHref({ basePath, queryString, collectionLayerId, page }),
+    href: buildPaginationHref({ basePath, queryString, collectionLayerId, page, paramName: meta.paramName }),
     rel: direction,
   };
 }
@@ -121,7 +153,7 @@ export function buildCanonicalPaginationQueryString(layers: Layer[], queryString
   const canonical = new URLSearchParams();
 
   for (const [layerId, meta] of Object.entries(collectPaginationMeta(layers))) {
-    const key = paginationParamKey(layerId);
+    const key = paginationParamKey(layerId, meta.paramName);
     const page = Number(requested.get(key));
 
     if (!Number.isInteger(page) || page < 2 || page > meta.totalPages) continue;

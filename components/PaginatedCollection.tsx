@@ -64,8 +64,9 @@ export default function PaginatedCollection({
       queryString: searchParams.toString(),
       collectionLayerId,
       page,
+      paramName: paginationMeta.paramName,
     });
-  }, [pathname, searchParams, totalPages, collectionLayerId]);
+  }, [pathname, searchParams, totalPages, collectionLayerId, paginationMeta.paramName]);
 
   // Handle click events on pagination controls (delegated at the document
   // level, so no wrapper element is required). The controls are server-rendered

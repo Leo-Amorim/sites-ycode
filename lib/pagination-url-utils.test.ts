@@ -7,6 +7,7 @@ import {
   buildPaginationQueryString,
   findPrimaryPaginatedCollection,
   paginationParamKey,
+  resolveCurrentPage,
 } from '@/lib/pagination-url-utils';
 
 import type { CollectionPaginationMeta, Layer } from '@/types';
@@ -29,6 +30,30 @@ function fragment(id: string, paginationMeta: CollectionPaginationMeta): Layer {
 test('paginationParamKey strips the layer prefix', () => {
   assert.equal(paginationParamKey('lyr-abc123'), 'p_abc123');
   assert.equal(paginationParamKey('abc123'), 'p_abc123');
+});
+
+test('a configured param name replaces the layer id, sanitized', () => {
+  assert.equal(paginationParamKey('lyr-abc123', 'news'), 'p_news');
+  assert.equal(paginationParamKey('lyr-abc123', ' News Feed! '), 'p_newsfeed');
+  // Nothing usable left after sanitizing falls back to the layer id
+  assert.equal(paginationParamKey('lyr-abc123', '!!!'), 'p_abc123');
+  assert.equal(paginationParamKey('lyr-abc123', ''), 'p_abc123');
+
+  assert.equal(
+    buildPaginationHref({ basePath: '/news', collectionLayerId: 'lyr-abc123', page: 3, paramName: 'news' }),
+    '/news?p_news=3'
+  );
+});
+
+test('resolveCurrentPage accepts the configured name and the legacy layer id', () => {
+  const pageNumbers = { news: 4, 'lyr-abc': 2, abc: 2 };
+
+  assert.equal(resolveCurrentPage(pageNumbers, 'lyr-abc', 'news'), 4);
+  // A URL indexed before the rename still resolves through the layer id
+  assert.equal(resolveCurrentPage({ 'lyr-abc': 2 }, 'lyr-abc', 'news'), 2);
+  assert.equal(resolveCurrentPage(pageNumbers, 'lyr-abc'), 2);
+  assert.equal(resolveCurrentPage(undefined, 'lyr-abc', 'news'), undefined);
+  assert.equal(resolveCurrentPage({}, 'lyr-abc', 'news'), undefined);
 });
 
 test('buildPaginationHref preserves other params and drops the param on page 1', () => {
