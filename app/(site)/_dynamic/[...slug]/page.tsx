@@ -2,10 +2,11 @@ import { notFound, redirect, permanentRedirect } from 'next/navigation';
 import { unstable_noStore } from 'next/cache';
 import type { Metadata } from 'next';
 import { fetchPageByPath, fetchErrorPage } from '@/lib/page-fetcher';
+import { fetchCachedErrorPage } from '@/lib/published-page-cache';
 import PageRenderer from '@/components/PageRenderer';
 import PaginationSeoLinks from '@/components/PaginationSeoLinks';
 import PasswordForm from '@/components/PasswordForm';
-import { fetchGlobalPageSettings, generatePageMetadata } from '@/lib/generate-page-metadata';
+import { fetchGlobalPageSettings, generateErrorPageMetadata, generatePageMetadata } from '@/lib/generate-page-metadata';
 import { getSettingByKey } from '@/lib/repositories/settingsRepository';
 import { parseAuthCookie, getPasswordProtection, fetchFoldersForAuth } from '@/lib/page-auth';
 import { getPaginationContext, toQueryString } from '@/lib/pagination-context';
@@ -160,20 +161,19 @@ export async function generateMetadata({ params, searchParams }: DynamicSlugPage
   ]);
 
   if (!data) {
-    return {
-      title: 'Page Not Found',
-      robots: { index: false, follow: false },
-    };
+    const errorPageData = await fetchCachedErrorPage(404);
+    return generateErrorPageMetadata(404, errorPageData?.page ?? null, {
+      globalSeoSettings: globalSettings,
+    });
   }
 
   // Don't leak metadata for protected pages — the page component gates access.
   const folders = await fetchFoldersForAuth(true);
   if (getPasswordProtection(data.page, folders, null).isProtected) {
-    return {
-      title: 'Password Protected',
-      description: 'This page is password protected.',
-      robots: { index: false, follow: false },
-    };
+    const errorPageData = await fetchCachedErrorPage(401);
+    return generateErrorPageMetadata(401, errorPageData?.page ?? null, {
+      globalSeoSettings: globalSettings,
+    });
   }
 
   const metadata = await generatePageMetadata(data.page, {
