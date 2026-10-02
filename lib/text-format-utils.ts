@@ -198,10 +198,12 @@ export const DEFAULT_TEXT_STYLES: Record<string, TextStyle> = {
   },
   code: {
     label: 'Code',
-    classes: 'font-mono bg-muted px-[4px] py-[2px] rounded text-[14px]',
+    // `current/10` rather than a theme token: published CSS is compiled from
+    // bare Tailwind with no project theme, so `bg-muted` resolves to nothing.
+    classes: 'font-mono bg-current/10 px-[4px] py-[2px] rounded text-[14px]',
     design: {
       typography: { fontFamily: 'mono', fontSize: '14px' },
-      backgrounds: { backgroundColor: 'muted' },
+      backgrounds: { backgroundColor: 'current/10' },
       spacing: { paddingLeft: '4px', paddingRight: '4px', paddingTop: '2px', paddingBottom: '2px' },
       borders: { borderRadius: 'rounded' },
     },
