@@ -500,6 +500,9 @@ function renderTextNode(
         case 'superscript':
           text = React.createElement('sup', buildProps('superscript', getMarkClass('superscript')), text);
           break;
+        case 'code':
+          text = React.createElement('code', buildProps('code', getMarkClass('code')), text);
+          break;
         case 'dynamicStyle': {
           // Dynamic style stores an array of styleKeys
           const styleKeys: string[] = mark.attrs?.styleKeys || [];
@@ -852,13 +855,17 @@ function renderBlock(
   components?: Component[],
   renderComponentBlock?: RenderComponentBlockFn,
   ancestorComponentIds?: Set<string>,
+  isStructuralParagraph = false,
 ): React.ReactNode {
   const key = `block-${idx}`;
 
   if (block.type === 'paragraph') {
-    const paragraphClass = getTextStyleClasses(textStyles, 'paragraph');
+    // Inside a styled container (blockquote, table cell) the paragraph exists
+    // only to hold the text: its own typography would override the container's,
+    // and its `data-style` would hijack the canvas style-selection lookup.
+    const paragraphClass = isStructuralParagraph ? '' : getTextStyleClasses(textStyles, 'paragraph');
     const paragraphProps: Record<string, any> = { key, className: paragraphClass };
-    if (isEditMode) {
+    if (isEditMode && !isStructuralParagraph) {
       paragraphProps['data-style'] = 'paragraph';
     }
 
@@ -943,7 +950,7 @@ function renderBlock(
       'blockquote',
       bqProps,
       block.content?.map((child: any, childIdx: number) =>
-        renderBlock(child, childIdx, collectionItemData, pageCollectionItemData, textStyles, useSpanForParagraphs, isEditMode, linkContext, timezone, layerDataMap, components, renderComponentBlock, ancestorComponentIds)
+        renderBlock(child, childIdx, collectionItemData, pageCollectionItemData, textStyles, useSpanForParagraphs, isEditMode, linkContext, timezone, layerDataMap, components, renderComponentBlock, ancestorComponentIds, true)
       )
     );
   }
@@ -1051,7 +1058,7 @@ function renderTableNode(
     if (child.type === 'tableRow' || child.type === 'tableCell' || child.type === 'tableHeader') {
       return renderTableNode(child, `${key}-${idx}`, collectionItemData, pageCollectionItemData, textStyles, isEditMode, linkContext, timezone, layerDataMap, components, renderComponentBlock, ancestorComponentIds, idx, rowIdx);
     }
-    return renderBlock(child, idx, collectionItemData, pageCollectionItemData, textStyles, false, isEditMode, linkContext, timezone, layerDataMap, components, renderComponentBlock, ancestorComponentIds);
+    return renderBlock(child, idx, collectionItemData, pageCollectionItemData, textStyles, false, isEditMode, linkContext, timezone, layerDataMap, components, renderComponentBlock, ancestorComponentIds, true);
   });
 
   const tagMap: Record<string, string> = {
