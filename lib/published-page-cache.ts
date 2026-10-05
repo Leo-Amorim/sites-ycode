@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { unstable_cache } from 'next/cache';
+import { buildAllPagesTag, buildRouteTag } from '@/lib/cache-tags';
 import { fetchErrorPage, fetchPageByPathForMetadata, slimPageData } from '@/lib/page-fetcher';
 import type { PageData } from '@/lib/page-fetcher';
 
@@ -21,7 +22,7 @@ export function fetchCachedErrorPage(
       return data ? slimPageData(data) : null;
     },
     [`error-${errorCode}`, tenantId ?? ''],
-    { tags: ['all-pages'], revalidate: false }
+    { tags: [buildAllPagesTag(tenantId)], revalidate: false }
   )();
 }
 
@@ -36,6 +37,6 @@ export function fetchCachedPageForMetadata(
   return unstable_cache(
     async () => fetchPageByPathForMetadata(slugPath, true, undefined, tenantId),
     [`metadata-/${slugPath}`, tenantId ?? ''],
-    { tags: [`route-/${slugPath}`, 'all-pages'], revalidate: false }
+    { tags: [buildRouteTag(tenantId, slugPath), buildAllPagesTag(tenantId)], revalidate: false }
   )();
 }
