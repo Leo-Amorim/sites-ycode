@@ -15,6 +15,14 @@
  * Navigation uses window.location.href (not router.push) so the proxy
  * middleware can rewrite p_ params to the /dynamic route.
  *
+ * The current URL is read from window.location at click time rather than via
+ * useSearchParams/usePathname: both hooks suspend during a static prerender,
+ * and the Suspense boundary wrapping this component would then bake its
+ * fallback into the published HTML — leaving page 1 of every paginated
+ * collection with no server-rendered items. window.location is also the
+ * accurate source behind a rewrite, where usePathname returns the internal
+ * path.
+ *
  * Layout note: this component renders a zero-box fragment (a hidden marker
  * span + the SSR children) rather than a wrapping div. The collection's item
  * clones are emitted as direct children of the collection's layout element
@@ -25,7 +33,6 @@
  */
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { useSearchParams, usePathname } from 'next/navigation';
 import { buildPaginationHref } from '@/lib/pagination-url-utils';
 import type { CollectionPaginationMeta } from '@/types';
 
@@ -40,8 +47,6 @@ export default function PaginatedCollection({
   paginationMeta,
   collectionLayerId,
 }: PaginatedCollectionProps) {
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
   const [isPending, setIsPending] = useState(false);
   const markerRef = useRef<HTMLSpanElement>(null);
 
@@ -60,13 +65,13 @@ export default function PaginatedCollection({
 
     setIsPending(true);
     window.location.href = buildPaginationHref({
-      basePath: pathname,
-      queryString: searchParams.toString(),
+      basePath: window.location.pathname,
+      queryString: window.location.search.replace(/^\?/, ''),
       collectionLayerId,
       page,
       paramName: paginationMeta.paramName,
     });
-  }, [pathname, searchParams, totalPages, collectionLayerId, paginationMeta.paramName]);
+  }, [totalPages, collectionLayerId, paginationMeta.paramName]);
 
   // Handle click events on pagination controls (delegated at the document
   // level, so no wrapper element is required). The controls are server-rendered
