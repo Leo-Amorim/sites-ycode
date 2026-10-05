@@ -12,6 +12,7 @@ import { getPaginationContext, toQueryString } from '@/lib/pagination-context';
 import { buildCanonicalPaginationQueryString } from '@/lib/pagination-url-utils';
 import { getSettingByKey } from '@/lib/repositories/settingsRepository';
 import { generateColorVariablesCss } from '@/lib/repositories/colorVariableRepository';
+import { getTenantIdFromHeaders } from '@/lib/supabase-server';
 import { getSiteBaseUrl } from '@/lib/url-utils';
 
 // Internal pagination path: always dynamic/no-store.
@@ -141,10 +142,12 @@ export async function generateMetadata({ searchParams }: DynamicHomeProps): Prom
   const queryString = toQueryString(resolvedSearchParams);
   const paginationContext = getPaginationContext('/', queryString);
 
-  const [data, globalSettings] = await Promise.all([
+  const [data, globalSettings, resolvedTenantId] = await Promise.all([
     fetchHomepage(true, paginationContext),
     fetchGlobalPageSettings(),
+    getTenantIdFromHeaders(),
   ]);
+  const tenantId = resolvedTenantId ?? undefined;
 
   if (!data) {
     return {
@@ -156,9 +159,10 @@ export async function generateMetadata({ searchParams }: DynamicHomeProps): Prom
   // Don't leak metadata for protected pages — the page component gates access.
   const folders = await fetchFoldersForAuth(true);
   if (getPasswordProtection(data.page, folders, null).isProtected) {
-    const errorPageData = await fetchCachedErrorPage(401);
+    const errorPageData = await fetchCachedErrorPage(401, tenantId);
     return generateErrorPageMetadata(401, errorPageData?.page ?? null, {
       globalSeoSettings: globalSettings,
+      tenantId,
     });
   }
 

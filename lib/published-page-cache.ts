@@ -20,7 +20,7 @@ export function fetchCachedErrorPage(
       const data = await fetchErrorPage(errorCode, true, tenantId);
       return data ? slimPageData(data) : null;
     },
-    [`error-${errorCode}`],
+    [`error-${errorCode}`, tenantId ?? ''],
     { tags: ['all-pages'], revalidate: false }
   )();
 }
@@ -35,7 +35,7 @@ export function fetchCachedPageForMetadata(
 ): Promise<PageData | null> {
   return unstable_cache(
     async () => fetchPageByPathForMetadata(slugPath, true, undefined, tenantId),
-    [`metadata-/${slugPath}`],
+    [`metadata-/${slugPath}`, tenantId ?? ''],
     { tags: [`route-/${slugPath}`, 'all-pages'], revalidate: false }
   )();
 }

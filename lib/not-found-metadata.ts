@@ -2,7 +2,14 @@ import 'server-only';
 
 import type { Metadata } from 'next';
 import { generateErrorPageMetadata } from '@/lib/generate-page-metadata';
+import type { GlobalPageSettings } from '@/lib/generate-page-metadata';
 import { fetchCachedErrorPage, fetchCachedPageForMetadata } from '@/lib/published-page-cache';
+
+export interface Custom404MetadataOptions {
+  /** Pre-fetched global settings (avoids a duplicate lookup) */
+  globalSeoSettings?: GlobalPageSettings;
+  tenantId?: string;
+}
 
 /**
  * Merge the custom 404 page's SEO into a layout's metadata when the requested
@@ -19,21 +26,27 @@ import { fetchCachedErrorPage, fetchCachedPageForMetadata } from '@/lib/publishe
  */
 export async function withCustom404Metadata(
   slugPath: string,
-  siteMetadata: Metadata
+  siteMetadata: Metadata,
+  options: Custom404MetadataOptions = {}
 ): Promise<Metadata> {
+  const { globalSeoSettings, tenantId } = options;
+
   // The homepage renders a welcome screen instead of a 404 when no index page
   // exists, so it never reaches the not-found boundary.
   if (!slugPath) {
     return siteMetadata;
   }
 
-  const page = await fetchCachedPageForMetadata(slugPath).catch(() => null);
+  const page = await fetchCachedPageForMetadata(slugPath, tenantId).catch(() => null);
   if (page) {
     return siteMetadata;
   }
 
-  const errorPageData = await fetchCachedErrorPage(404).catch(() => null);
-  const errorMetadata = await generateErrorPageMetadata(404, errorPageData?.page ?? null);
+  const errorPageData = await fetchCachedErrorPage(404, tenantId).catch(() => null);
+  const errorMetadata = await generateErrorPageMetadata(404, errorPageData?.page ?? null, {
+    globalSeoSettings,
+    tenantId,
+  });
 
   return { ...siteMetadata, ...errorMetadata };
 }
