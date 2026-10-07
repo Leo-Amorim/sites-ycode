@@ -45,6 +45,18 @@ import FileManagerDialog from '../../components/FileManagerDialog';
 import { toast } from 'sonner';
 import { ASSET_CATEGORIES } from '@/lib/asset-constants';
 
+/**
+ * Build an example security.txt `Expires` value for the placeholder.
+ * RFC 9116 recommends less than a year ahead, so this lands a day short.
+ */
+function getSecurityTxtExpiryExample(): string {
+  const expiry = new Date();
+  expiry.setFullYear(expiry.getFullYear() + 1);
+  expiry.setDate(expiry.getDate() - 1);
+
+  return `${expiry.toISOString().slice(0, 10)}T00:00:00.000Z`;
+}
+
 export default function GeneralSettingsPage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('website');
@@ -64,6 +76,9 @@ export default function GeneralSettingsPage() {
   const [robotsTxt, setRobotsTxt] = useState(storedRobotsTxt || '');
   const [llmsTxt, setLlmsTxt] = useState(storedLlmsTxt || '');
   const [securityTxt, setSecurityTxt] = useState(storedSecurityTxt || '');
+  const securityTxtPlaceholder = useMemo(() => (
+    `Contact: mailto:security@example.com\nExpires: ${getSecurityTxtExpiryExample()}\nPreferred-Languages: en`
+  ), []);
 
   // Initialize Google Analytics, Site Verification, and Canonical URL from store
   const storedGaMeasurementId = getSettingByKey('ga_measurement_id') as string | null;
@@ -647,7 +662,7 @@ export default function GeneralSettingsPage() {
                     id="security"
                     value={securityTxt}
                     onChange={(e) => setSecurityTxt(e.target.value)}
-                    placeholder={'Contact: mailto:security@example.com\nExpires: 2027-01-01T00:00:00.000Z\nPreferred-Languages: en'}
+                    placeholder={securityTxtPlaceholder}
                   />
                 </Field>
 
