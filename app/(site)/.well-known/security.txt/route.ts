@@ -14,7 +14,9 @@ export async function GET() {
     const customSecurity = await getSettingByKey('security_txt');
 
     if (customSecurity && typeof customSecurity === 'string' && customSecurity.trim()) {
-      return new NextResponse(customSecurity.trim(), {
+      // The RFC 9116 grammar terminates every line, last one included, so
+      // validators flag a file that ends without a newline.
+      return new NextResponse(`${customSecurity.trim()}\n`, {
         headers: {
           'Content-Type': 'text/plain; charset=utf-8',
           'Cache-Control': 'public, max-age=86400, s-maxage=86400',

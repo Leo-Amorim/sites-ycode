@@ -42,7 +42,7 @@ import type { SecurityHeadersSettings } from '@/lib/security-headers';
 const REFERRER_POLICY_OFF = 'off';
 
 /**
- * Build an example security.txt `Expires` value for the placeholder.
+ * Build an example security.txt `Expires` value.
  * RFC 9116 recommends less than a year ahead, so this lands a day short.
  */
 function getSecurityTxtExpiryExample(): string {
@@ -51,6 +51,39 @@ function getSecurityTxtExpiryExample(): string {
   expiry.setDate(expiry.getDate() - 1);
 
   return `${expiry.toISOString().slice(0, 10)}T00:00:00.000Z`;
+}
+
+/** Pull the hostname out of the configured canonical URL, for template examples. */
+function getSecurityTxtDomain(canonicalUrl: string | null): string {
+  if (!canonicalUrl?.trim()) {
+    return 'example.com';
+  }
+
+  const withProtocol = /^https?:\/\//i.test(canonicalUrl.trim())
+    ? canonicalUrl.trim()
+    : `https://${canonicalUrl.trim()}`;
+
+  try {
+    return new URL(withProtocol).hostname || 'example.com';
+  } catch {
+    return 'example.com';
+  }
+}
+
+/**
+ * Build a starter security.txt. Contact and Expires are the only fields RFC 9116
+ * requires, so the uncommented lines alone are already a valid file.
+ */
+function buildSecurityTxtTemplate(domain: string): string {
+  return [
+    `Contact: mailto:security@${domain}`,
+    `Expires: ${getSecurityTxtExpiryExample()}`,
+    '',
+    '# Optional - uncomment the ones you offer:',
+    `# Policy: https://${domain}/security-policy`,
+    `# Encryption: https://${domain}/pgp-key.txt`,
+    `# Acknowledgments: https://${domain}/security-thanks`,
+  ].join('\n');
 }
 
 export default function SecuritySettingsPage() {
@@ -73,11 +106,13 @@ export default function SecuritySettingsPage() {
   const [isSavingSpam, setIsSavingSpam] = useState(false);
 
   const storedSecurityTxt = getSettingByKey('security_txt') as string | null;
+  const canonicalUrl = getSettingByKey('global_canonical_url') as string | null;
   const [securityTxt, setSecurityTxt] = useState(storedSecurityTxt || '');
   const [isSavingSecurityTxt, setIsSavingSecurityTxt] = useState(false);
-  const securityTxtPlaceholder = useMemo(() => (
-    `Contact: mailto:security@example.com\nExpires: ${getSecurityTxtExpiryExample()}\nPreferred-Languages: en`
-  ), []);
+  const securityTxtTemplate = useMemo(
+    () => buildSecurityTxtTemplate(getSecurityTxtDomain(canonicalUrl)),
+    [canonicalUrl],
+  );
 
   // Individual header controls are gated on the master toggle.
   const disabled = !settings.enabled;
@@ -144,6 +179,10 @@ export default function SecuritySettingsPage() {
       setIsSavingSpam(false);
     }
   }, [rateLimitInput, saveSettings, spamSettings]);
+
+  const handleGenerateSecurityTxt = useCallback(() => {
+    setSecurityTxt(securityTxtTemplate);
+  }, [securityTxtTemplate]);
 
   const handleSaveSecurityTxt = useCallback(async () => {
     setIsSavingSecurityTxt(true);
@@ -419,9 +458,19 @@ export default function SecuritySettingsPage() {
                 id="security-txt"
                 value={securityTxt}
                 onChange={(e) => setSecurityTxt(e.target.value)}
-                placeholder={securityTxtPlaceholder}
-                className="min-h-24"
+                placeholder={securityTxtTemplate}
+                className="min-h-36"
               />
+              {!securityTxt.trim() && (
+                <div className="flex">
+                  <Button
+                    size="sm" variant="secondary"
+                    onClick={handleGenerateSecurityTxt}
+                  >
+                    Generate template
+                  </Button>
+                </div>
+              )}
             </Field>
 
             <div className="col-span-2 flex justify-end">
