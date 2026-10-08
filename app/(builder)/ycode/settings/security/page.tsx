@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
+import { usePrimaryDomain } from '@/hooks/use-primary-domain';
 import { cn, isCloudVersion } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/useSettingsStore';
 import {
@@ -53,20 +54,20 @@ function getSecurityTxtExpiryExample(): string {
   return `${expiry.toISOString().slice(0, 10)}T00:00:00.000Z`;
 }
 
-/** Pull the hostname out of the configured canonical URL, for template examples. */
-function getSecurityTxtDomain(canonicalUrl: string | null): string {
-  if (!canonicalUrl?.trim()) {
-    return 'example.com';
+/** Pull the hostname out of a URL or bare domain, for template examples. */
+function extractHostname(url: string | null): string | null {
+  const trimmed = url?.trim();
+
+  if (!trimmed) {
+    return null;
   }
 
-  const withProtocol = /^https?:\/\//i.test(canonicalUrl.trim())
-    ? canonicalUrl.trim()
-    : `https://${canonicalUrl.trim()}`;
+  const withProtocol = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
 
   try {
-    return new URL(withProtocol).hostname || 'example.com';
+    return new URL(withProtocol).hostname || null;
   } catch {
-    return 'example.com';
+    return null;
   }
 }
 
@@ -82,6 +83,7 @@ function buildSecurityTxtTemplate(domain: string): string {
 
 export default function SecuritySettingsPage() {
   const { getSettingByKey, saveSettings } = useSettingsStore();
+  const primaryDomain = usePrimaryDomain();
 
   const stored = getSettingByKey(SECURITY_HEADERS_SETTING_KEY) as Partial<SecurityHeadersSettings> | null;
   const [settings, setSettings] = useState<SecurityHeadersSettings>({
@@ -104,8 +106,8 @@ export default function SecuritySettingsPage() {
   const [securityTxt, setSecurityTxt] = useState(storedSecurityTxt || '');
   const [isSavingSecurityTxt, setIsSavingSecurityTxt] = useState(false);
   const securityTxtTemplate = useMemo(
-    () => buildSecurityTxtTemplate(getSecurityTxtDomain(canonicalUrl)),
-    [canonicalUrl],
+    () => buildSecurityTxtTemplate(extractHostname(canonicalUrl) || primaryDomain || 'example.com'),
+    [canonicalUrl, primaryDomain],
   );
 
   // Individual header controls are gated on the master toggle.
