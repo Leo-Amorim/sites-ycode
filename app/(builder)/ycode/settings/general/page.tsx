@@ -45,18 +45,6 @@ import FileManagerDialog from '../../components/FileManagerDialog';
 import { toast } from 'sonner';
 import { ASSET_CATEGORIES } from '@/lib/asset-constants';
 
-/**
- * Build an example security.txt `Expires` value for the placeholder.
- * RFC 9116 recommends less than a year ahead, so this lands a day short.
- */
-function getSecurityTxtExpiryExample(): string {
-  const expiry = new Date();
-  expiry.setFullYear(expiry.getFullYear() + 1);
-  expiry.setDate(expiry.getDate() - 1);
-
-  return `${expiry.toISOString().slice(0, 10)}T00:00:00.000Z`;
-}
-
 export default function GeneralSettingsPage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('website');
@@ -69,16 +57,11 @@ export default function GeneralSettingsPage() {
   );
   const [isSaving, setIsSaving] = useState(false);
 
-  // Initialize robots.txt, llms.txt and security.txt from store
+  // Initialize robots.txt and llms.txt from store
   const storedRobotsTxt = getSettingByKey('robots_txt') as string | null;
   const storedLlmsTxt = getSettingByKey('llms_txt') as string | null;
-  const storedSecurityTxt = getSettingByKey('security_txt') as string | null;
   const [robotsTxt, setRobotsTxt] = useState(storedRobotsTxt || '');
   const [llmsTxt, setLlmsTxt] = useState(storedLlmsTxt || '');
-  const [securityTxt, setSecurityTxt] = useState(storedSecurityTxt || '');
-  const securityTxtPlaceholder = useMemo(() => (
-    `Contact: mailto:security@example.com\nExpires: ${getSecurityTxtExpiryExample()}\nPreferred-Languages: en`
-  ), []);
 
   // Initialize Google Analytics, Site Verification, and Canonical URL from store
   const storedGaMeasurementId = getSettingByKey('ga_measurement_id') as string | null;
@@ -193,13 +176,12 @@ export default function GeneralSettingsPage() {
       sitemap: sitemapSettings,
       robots_txt: robotsTxt,
       llms_txt: llmsTxt,
-      security_txt: securityTxt,
       ga_measurement_id: gaMeasurementId,
       google_site_verification: googleSiteVerification,
       global_canonical_url: globalCanonicalUrl,
     });
     setIsSaving(false);
-  }, [saveSettings, sitemapSettings, robotsTxt, llmsTxt, securityTxt, gaMeasurementId, googleSiteVerification, globalCanonicalUrl]);
+  }, [saveSettings, sitemapSettings, robotsTxt, llmsTxt, gaMeasurementId, googleSiteVerification, globalCanonicalUrl]);
 
   // Save custom code settings
   const saveCustomCodeSettings = useCallback(async () => {
@@ -648,21 +630,6 @@ export default function GeneralSettingsPage() {
                     id="llms"
                     value={llmsTxt}
                     onChange={(e) => setLlmsTxt(e.target.value)}
-                  />
-                </Field>
-
-                <Field className="col-span-2">
-                  <FieldLabel htmlFor="security">
-                    Contents of &ldquo;security.txt&rdquo;
-                  </FieldLabel>
-                  <FieldDescription>
-                    If populated, will be served at /.well-known/security.txt so researchers know how to report vulnerabilities. Learn more about this file at securitytxt.org.
-                  </FieldDescription>
-                  <Textarea
-                    id="security"
-                    value={securityTxt}
-                    onChange={(e) => setSecurityTxt(e.target.value)}
-                    placeholder={securityTxtPlaceholder}
                   />
                 </Field>
 
