@@ -6,6 +6,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface ConsentFormProps {
   clientName: string;
+  siteName: string | null;
   userEmail: string;
   clientId: string;
   redirectUri: string;
@@ -18,9 +19,11 @@ interface ConsentFormProps {
 export default function ConsentForm(props: ConsentFormProps) {
   const [submitting, setSubmitting] = useState<'approve' | 'deny' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [siteHost, setSiteHost] = useState('');
 
   useEffect(() => {
     document.documentElement.classList.add('dark');
+    setSiteHost(window.location.host);
     return () => {
       document.documentElement.classList.remove('dark');
     };
@@ -68,6 +71,8 @@ export default function ConsentForm(props: ConsentFormProps) {
     // keep raw value on parse failure
   }
 
+  const siteLabel = props.siteName || siteHost || 'this YCode project';
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-neutral-950 p-6">
       <div className="w-full max-w-md flex flex-col gap-6 p-8 rounded-lg border border-white/10 bg-neutral-900">
@@ -82,7 +87,11 @@ export default function ConsentForm(props: ConsentFormProps) {
         <div className="text-sm text-white/80 leading-relaxed">
           <p>
             <span className="font-medium text-white">{props.clientName}</span> is requesting
-            access to your YCode project through the Model Context Protocol.
+            access to <span className="font-medium text-white">{siteLabel}</span>
+            {props.siteName && siteHost ? (
+              <> (<span className="font-mono text-white/70">{siteHost}</span>)</>
+            ) : null}
+            {' '}through the Model Context Protocol.
           </p>
           <p className="mt-3 text-white/60">
             If you approve, this application will be able to read and modify your pages,

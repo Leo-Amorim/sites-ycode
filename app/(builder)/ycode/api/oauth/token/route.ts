@@ -1,7 +1,8 @@
 import { NextRequest } from 'next/server';
 import { consumeCode, cleanupExpired } from '@/lib/repositories/mcpOAuthCodeRepository';
-import { getClient } from '@/lib/repositories/mcpOAuthClientRepository';
+import { cleanupOrphanClients, getClient } from '@/lib/repositories/mcpOAuthClientRepository';
 import {
+  cleanupExpiredOAuthTokens,
   createOAuthToken,
   rotateRefreshToken,
   type OAuthTokenPair,
@@ -102,9 +103,12 @@ export async function POST(request: NextRequest) {
     return jsonError(400, 'invalid_request', 'Missing or unparseable request body');
   }
 
-  // Best-effort cleanup of expired codes ~10% of the time.
+  // Best-effort cleanup of expired codes, dead OAuth tokens, and orphaned
+  // DCR registrations ~10% of the time.
   if (Math.random() < 0.1) {
     cleanupExpired().catch(() => {});
+    cleanupExpiredOAuthTokens().catch(() => {});
+    cleanupOrphanClients().catch(() => {});
   }
 
   if (body.grant_type === 'authorization_code') {
@@ -180,9 +184,9 @@ async function handleRefreshToken(body: FormBody): Promise<Response> {
     return jsonError(400, 'invalid_request', 'client_id is required');
   }
 
-  const pair = await rotateRefreshToken(refreshToken);
+  const pair = await rotateRefreshToken(refreshToken, clientId);
   if (!pair) {
-    return jsonError(400, 'invalid_grant', 'Refresh token is invalid, expired, or already rotated');
+    return jsonError(400, 'invalid_grant', 'Refresh token is invalid, expired, revoked, or issued to another client');
   }
 
   return jsonTokens(pair);

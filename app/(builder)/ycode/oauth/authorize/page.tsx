@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { getAuthUser } from '@/lib/supabase-auth';
 import { getClient } from '@/lib/repositories/mcpOAuthClientRepository';
+import { getSettingByKey } from '@/lib/repositories/settingsRepository';
 import ConsentForm from './ConsentForm';
 
 /**
@@ -131,9 +132,20 @@ export default async function AuthorizePage({
     );
   }
 
+  // Site name is informational only — users with several projects need to see
+  // which one they are granting access to. Never block consent on it.
+  let siteName: string | null = null;
+  try {
+    const stored = await getSettingByKey('site_name');
+    siteName = typeof stored === 'string' && stored.trim() !== '' ? stored.trim() : null;
+  } catch (error) {
+    console.error('[oauth/authorize page] getSettingByKey(site_name) failed:', error);
+  }
+
   return (
     <ConsentForm
       clientName={client.client_name}
+      siteName={siteName}
       userEmail={auth.user.email || ''}
       clientId={clientId}
       redirectUri={redirectUri}
