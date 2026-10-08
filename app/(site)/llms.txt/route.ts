@@ -8,9 +8,12 @@
 
 import { NextResponse } from 'next/server';
 import { getSettingByKey } from '@/lib/repositories/settingsRepository';
+import { tagResponseForPublish } from '@/lib/response-cache-tag';
 
 export async function GET() {
   try {
+    await tagResponseForPublish();
+
     const customLlms = await getSettingByKey('llms_txt');
 
     if (customLlms && typeof customLlms === 'string' && customLlms.trim()) {

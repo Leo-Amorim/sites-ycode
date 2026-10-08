@@ -8,9 +8,12 @@
 
 import { NextResponse } from 'next/server';
 import { getSettingByKey } from '@/lib/repositories/settingsRepository';
+import { tagResponseForPublish } from '@/lib/response-cache-tag';
 
 export async function GET() {
   try {
+    await tagResponseForPublish();
+
     const customSecurity = await getSettingByKey('security_txt');
 
     if (customSecurity && typeof customSecurity === 'string' && customSecurity.trim()) {
