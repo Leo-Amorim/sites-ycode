@@ -70,19 +70,13 @@ function getSecurityTxtDomain(canonicalUrl: string | null): string {
   }
 }
 
-/**
- * Build a starter security.txt. Contact and Expires are the only fields RFC 9116
- * requires, so the uncommented lines alone are already a valid file.
- */
+/** Build a starter security.txt the user can edit. */
 function buildSecurityTxtTemplate(domain: string): string {
   return [
-    `Contact: mailto:security@${domain}`,
+    `Contact: https://${domain}/contact`,
     `Expires: ${getSecurityTxtExpiryExample()}`,
-    '',
-    '# Optional - uncomment the ones you offer:',
-    `# Policy: https://${domain}/security-policy`,
-    `# Encryption: https://${domain}/pgp-key.txt`,
-    `# Acknowledgments: https://${domain}/security-thanks`,
+    'Preferred-Languages: en',
+    `Policy: https://${domain}/security-policy`,
   ].join('\n');
 }
 
@@ -452,28 +446,34 @@ export default function SecuritySettingsPage() {
             <Field className="col-span-2">
               <FieldLabel htmlFor="security-txt">Contents of security.txt</FieldLabel>
               <FieldDescription>
-                Served at /.well-known/security.txt. Keep the Expires date less than a year ahead and refresh it when you review the contacts — a stale file is worse than none. Learn more at securitytxt.org.
+                Served at /.well-known/security.txt. Keep the Expires date less than a year ahead and refresh it whenever you review the contacts, as a stale file is worse than none. Learn more at{' '}
+                <a
+                  href="https://securitytxt.org"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-foreground underline"
+                >
+                  securitytxt.org
+                </a>.
               </FieldDescription>
               <Textarea
                 id="security-txt"
                 value={securityTxt}
                 onChange={(e) => setSecurityTxt(e.target.value)}
                 placeholder={securityTxtTemplate}
-                className="min-h-36"
+                className="min-h-24"
               />
-              {!securityTxt.trim() && (
-                <div className="flex">
-                  <Button
-                    size="sm" variant="secondary"
-                    onClick={handleGenerateSecurityTxt}
-                  >
-                    Generate template
-                  </Button>
-                </div>
-              )}
             </Field>
 
-            <div className="col-span-2 flex justify-end">
+            <div className="col-span-2 flex justify-end gap-2">
+              {!securityTxt.trim() && (
+                <Button
+                  size="sm" variant="secondary"
+                  onClick={handleGenerateSecurityTxt}
+                >
+                  Generate template
+                </Button>
+              )}
               <Button
                 size="sm" onClick={handleSaveSecurityTxt}
                 disabled={isSavingSecurityTxt}
