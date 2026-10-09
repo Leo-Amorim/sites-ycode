@@ -19,6 +19,8 @@ import {
   getTiptapTextContent,
   buildTiptapDoc,
   applyDesignToLayer,
+  applyImageUpdate,
+  describeImageUpdate,
   generateId,
 } from '@/lib/mcp/utils';
 import type { RichTextBlock } from '@/lib/mcp/utils';
@@ -799,7 +801,8 @@ Pass variant_id to target a specific named variant; omit it to update the primar
         z.object({
           type: z.literal('update_image'),
           layer_id: z.string().describe('Layer ID or ref_id'),
-          asset_id: z.string().describe('Asset ID from upload_asset'),
+          asset_id: z.string().optional().describe('Asset ID from upload_asset. Omit to keep the current image and only change alt.'),
+          alt: z.string().optional().describe('Image alt text for accessibility. Omit to keep the current alt.'),
         }),
         z.object({
           type: z.literal('set_rich_text'),
@@ -952,27 +955,17 @@ Pass variant_id to target a specific named variant; omit it to update the primar
               const layerId = refMap.get(op.layer_id) || op.layer_id;
               const layer = findLayerById(layers, layerId);
               if (!layer) { results.push({ op: i, status: 'error', detail: `Layer "${op.layer_id}" not found` }); continue; }
-              layers = updateLayerById(layers, layerId, (l) => {
-                const existing = (l.variables?.image || {}) as Record<string, unknown>;
-                const existingSrc = l.variables?.image?.src as { id?: string } | undefined;
-                return {
-                  ...l,
-                  variables: {
-                    ...l.variables,
-                    image: {
-                      ...existing,
-                      // Preserve any linked component-variable id on src.
-                      src: {
-                        type: 'asset' as const,
-                        ...(existingSrc?.id ? { id: existingSrc.id } : {}),
-                        data: { asset_id: op.asset_id },
-                      },
-                      alt: (existing.alt || { type: 'dynamic_text' as const, data: { content: '' } }) as { type: 'dynamic_text'; data: { content: string } },
-                    },
-                  },
-                };
-              });
-              results.push({ op: i, status: 'ok', detail: `Set image on "${layer.customName || layer.name}"` });
+              if (op.asset_id === undefined && op.alt === undefined) {
+                results.push({ op: i, status: 'error', detail: 'update_image needs asset_id and/or alt' });
+                continue;
+              }
+              if (op.asset_id === undefined && !layer.variables?.image?.src) {
+                results.push({ op: i, status: 'error', detail: `"${layer.customName || layer.name}" has no image yet — pass asset_id to set one before alt` });
+                continue;
+              }
+              // applyImageUpdate keeps a linked component-variable id on src.
+              layers = updateLayerById(layers, layerId, (l) => applyImageUpdate(l, op));
+              results.push({ op: i, status: 'ok', detail: `${describeImageUpdate(op)} on "${layer.customName || layer.name}"` });
               break;
             }
 

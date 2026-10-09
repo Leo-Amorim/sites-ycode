@@ -13,6 +13,7 @@ import {
   buildTiptapDoc,
   applyDesignToLayer,
   applyBackgroundImageDesign,
+  applyImageUpdate,
 } from '@/lib/mcp/utils';
 import type { RichTextBlock } from '@/lib/mcp/utils';
 import { layerToExportHtml } from '@/lib/html-layer-converter';
@@ -310,7 +311,7 @@ or a named size ("sm", "md", "lg"). Apply on the text/heading/button layer.`,
       page_id: z.string().describe('The page ID'),
       layer_id: z.string().describe('The image layer ID'),
       asset_id: z.string().describe('Asset ID from the asset library'),
-      alt: z.string().optional().describe('Image alt text for accessibility'),
+      alt: z.string().optional().describe('Image alt text for accessibility. Omit to keep the current alt.'),
     },
     async ({ page_id, layer_id, asset_id, alt }) => {
       const layers = await getPageLayers(page_id);
@@ -319,16 +320,7 @@ or a named size ("sm", "md", "lg"). Apply on the text/heading/button layer.`,
         return { content: [{ type: 'text' as const, text: `Error: Layer "${layer_id}" not found.` }], isError: true };
       }
 
-      const updated = updateLayerById(layers, layer_id, (l) => ({
-        ...l,
-        variables: {
-          ...l.variables,
-          image: {
-            src: { type: 'asset' as const, data: { asset_id } },
-            alt: { type: 'dynamic_text' as const, data: { content: alt || '' } },
-          },
-        },
-      }));
+      const updated = updateLayerById(layers, layer_id, (l) => applyImageUpdate(l, { asset_id, alt }));
 
       await savePageLayers(page_id, updated);
       return { content: [{ type: 'text' as const, text: `Set image for "${layer.customName || layer.name}" to asset ${asset_id}` }] };

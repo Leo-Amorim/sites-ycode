@@ -43,6 +43,47 @@ export function updateLayerById(
   });
 }
 
+export interface ImageUpdate {
+  /** New asset to display. Omit to keep the current image. */
+  asset_id?: string;
+  /** New alt text. Omit to keep the current alt. */
+  alt?: string;
+}
+
+/**
+ * Apply an image source and/or alt text change to a layer's image variable.
+ *
+ * Keeps whatever is not being changed, including a component-variable link
+ * (`src.id`) so updating the picture inside a component does not unlink it.
+ * Pass the result of this to `updateLayerById`.
+ */
+export function applyImageUpdate(layer: Layer, update: ImageUpdate): Layer {
+  const existing = layer.variables?.image;
+  const src = update.asset_id !== undefined
+    ? { type: 'asset' as const, ...(existing?.src?.id ? { id: existing.src.id } : {}), data: { asset_id: update.asset_id } }
+    : existing?.src;
+  const alt = update.alt !== undefined
+    ? { ...existing?.alt, type: 'dynamic_text' as const, data: { content: update.alt } }
+    : existing?.alt ?? { type: 'dynamic_text' as const, data: { content: '' } };
+
+  if (!src) {
+    // Alt-only update on a layer that has no image yet: nothing to attach the alt to.
+    return layer;
+  }
+
+  return {
+    ...layer,
+    variables: { ...layer.variables, image: { ...existing, src, alt } },
+  };
+}
+
+/** Human-readable summary of an image update for batch results. */
+export function describeImageUpdate(update: ImageUpdate): string {
+  if (update.asset_id !== undefined && update.alt !== undefined) return 'Set image and alt text';
+  if (update.alt !== undefined) return 'Set alt text';
+  return 'Set image';
+}
+
 export function insertLayer(
   layers: Layer[],
   parentId: string,
