@@ -225,7 +225,8 @@ Use \`set_rich_text_content\` or the batch \`set_rich_text\` operation.
 ### Setting Layer Content
 
 - **Images:** upload_asset (from URL) → update_layer_image with the returned asset_id and alt text.
-  Background images: update_layer_background_image.
+  Background images: update_layer_background_image. Images inside a component (e.g. a navbar
+  logo): update_component_layers with an update_image op — pass alt alone to change only the alt text.
 - **Links:** update_layer_link — url / page / email / phone / asset / anchor (see its description).
 - **Video / iframe:** update_layer_video / update_layer_iframe.
 - **HTML tag, embed code, custom attributes, per-element config (slider, lightbox, map,

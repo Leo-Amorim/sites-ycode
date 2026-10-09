@@ -12,6 +12,8 @@ import {
   getTiptapTextContent,
   buildTiptapDoc,
   applyDesignToLayer,
+  applyImageUpdate,
+  describeImageUpdate,
 } from '@/lib/mcp/utils';
 import type { RichTextBlock } from '@/lib/mcp/utils';
 import { getCachedLayers, saveCachedLayers } from '@/lib/mcp/page-layers';
@@ -72,7 +74,8 @@ const moveLayerOp = z.object({
 const updateImageOp = z.object({
   type: z.literal('update_image'),
   layer_id: z.string().describe('Layer ID or ref_id from a prior add_layer'),
-  asset_id: z.string().describe('Asset ID from upload_asset'),
+  asset_id: z.string().optional().describe('Asset ID from upload_asset. Omit to keep the current image and only change alt.'),
+  alt: z.string().optional().describe('Image alt text for accessibility. Omit to keep the current alt.'),
 });
 
 const applyStyleOp = z.object({
@@ -213,21 +216,16 @@ EXAMPLE:
               const layerId = resolveId(op.layer_id, refMap);
               const layer = findLayerById(layers, layerId);
               if (!layer) { results.push({ op: i, status: 'error', detail: `Layer "${op.layer_id}" not found` }); continue; }
-              layers = updateLayerById(layers, layerId, (l) => {
-                const existing = (l.variables?.image || {}) as Record<string, unknown>;
-                return {
-                  ...l,
-                  variables: {
-                    ...l.variables,
-                    image: {
-                      ...existing,
-                      src: { type: 'asset' as const, data: { asset_id: op.asset_id } },
-                      alt: (existing.alt || { type: 'dynamic_text' as const, data: { content: '' } }) as { type: 'dynamic_text'; data: { content: string } },
-                    },
-                  },
-                };
-              });
-              results.push({ op: i, status: 'ok', detail: `Set image on "${layer.customName || layer.name}"` });
+              if (op.asset_id === undefined && op.alt === undefined) {
+                results.push({ op: i, status: 'error', detail: 'update_image needs asset_id and/or alt' });
+                continue;
+              }
+              if (op.asset_id === undefined && !layer.variables?.image?.src) {
+                results.push({ op: i, status: 'error', detail: `"${layer.customName || layer.name}" has no image yet — pass asset_id to set one before alt` });
+                continue;
+              }
+              layers = updateLayerById(layers, layerId, (l) => applyImageUpdate(l, op));
+              results.push({ op: i, status: 'ok', detail: `${describeImageUpdate(op)} on "${layer.customName || layer.name}"` });
               break;
             }
 
