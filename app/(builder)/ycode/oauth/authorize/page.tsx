@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getAuthUser } from '@/lib/supabase-auth';
-import { getClient } from '@/lib/repositories/mcpOAuthClientRepository';
+import { isRedirectUriRegistered, resolveOAuthClient } from '@/lib/oauth/resolve-client';
 import { getSettingByKey } from '@/lib/repositories/settingsRepository';
 import ConsentForm from './ConsentForm';
 
@@ -103,9 +103,9 @@ export default async function AuthorizePage({
 
   let client;
   try {
-    client = await getClient(clientId);
+    client = await resolveOAuthClient(clientId);
   } catch (error) {
-    console.error('[oauth/authorize page] getClient failed:', error);
+    console.error('[oauth/authorize page] resolveOAuthClient failed:', error);
     return (
       <ErrorPanel
         title="Authorization unavailable"
@@ -118,12 +118,12 @@ export default async function AuthorizePage({
     return (
       <ErrorPanel
         title="Unknown client"
-        message="The application requesting access has not been registered with this YCode instance."
+        message="The application requesting access has not been registered with this YCode instance, or its client metadata document could not be fetched."
       />
     );
   }
 
-  if (!client.redirect_uris.includes(redirectUri)) {
+  if (!isRedirectUriRegistered(client, redirectUri)) {
     return (
       <ErrorPanel
         title="Invalid redirect URI"
