@@ -18,8 +18,11 @@ export default function McpPage() {
 
   useEffect(() => {
     const { origin, hostname } = window.location;
-    setMcpUrl(`${origin}/ycode/mcp`);
-    setIsLocalhost(hostname === 'localhost' || hostname === '127.0.0.1' || hostname.endsWith('.localhost'));
+    // Deployments behind a reverse proxy or served from several hostnames can
+    // pin the advertised endpoint; otherwise it is this site's own /ycode/mcp.
+    const configured = process.env.NEXT_PUBLIC_MCP_SERVER_URL?.trim();
+    setMcpUrl(configured || `${origin}/ycode/mcp`);
+    setIsLocalhost(!configured && (hostname === 'localhost' || hostname === '127.0.0.1' || hostname.endsWith('.localhost')));
   }, []);
 
   const fetchTokens = useCallback(async () => {

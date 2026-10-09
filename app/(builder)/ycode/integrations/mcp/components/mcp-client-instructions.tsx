@@ -35,6 +35,10 @@ function Note({ children }: { children: React.ReactNode }) {
 
 /**
  * Per-client connection instructions for the OAuth MCP endpoint.
+ *
+ * Self-hosted projects are not listed in any vendor connector directory (each
+ * install has its own URL), so every client is set up as a custom / manual
+ * connector pointing at this project's URL.
  */
 export default function McpClientInstructions({ url, isLocalhost }: McpClientInstructionsProps) {
   const hostedOnlyNote = isLocalhost ? (
@@ -49,7 +53,14 @@ export default function McpClientInstructions({ url, isLocalhost }: McpClientIns
 
   return (
     <div className="flex flex-col gap-4">
-      <span className="text-base font-medium">How to connect</span>
+      <div className="flex flex-col gap-1">
+        <span className="text-base font-medium">How to connect</span>
+        <p className="text-sm text-muted-foreground">
+          Self-hosted YCode projects aren&apos;t listed in the Claude or ChatGPT connector
+          directories, because every project has its own URL. Add this project as a
+          <strong> custom connector</strong> instead — the steps below cover each client.
+        </p>
+      </div>
 
       <Tabs
         defaultValue="claude"
@@ -71,11 +82,15 @@ export default function McpClientInstructions({ url, isLocalhost }: McpClientIns
           <Steps
             steps={[
               { text: <>Open <strong>Settings → Connectors</strong>.</> },
-              { text: <>Click <strong>Add custom connector</strong>.</> },
-              { text: 'Name it “YCode” and paste the MCP server URL.' },
-              { text: <>Click <strong>Connect</strong>, sign in to YCode, and approve access.</> },
+              { text: <>Scroll past the directory and click <strong>Add custom connector</strong>.</> },
+              { text: <>Name it “YCode” and paste the MCP server URL into <strong>Remote MCP server URL</strong>. Leave the OAuth client ID and secret fields empty.</> },
+              { text: <>Click <strong>Add</strong>, then <strong>Connect</strong>. Sign in to YCode and approve access.</> },
             ]}
           />
+          <Note>
+            Custom connectors require a paid Claude plan (Pro, Max, Team, or Enterprise). On Team
+            and Enterprise plans an owner may need to add the connector for the organization.
+          </Note>
           {hostedOnlyNote}
         </TabsContent>
 
@@ -127,6 +142,10 @@ export default function McpClientInstructions({ url, isLocalhost }: McpClientIns
               { text: <>Choose <strong>OAuth</strong> authentication, then sign in to YCode and approve access.</> },
             ]}
           />
+          <Note>
+            Developer mode connectors are available on ChatGPT Plus, Pro, Business, Enterprise, and
+            Edu plans.
+          </Note>
           {hostedOnlyNote}
         </TabsContent>
 
@@ -151,7 +170,10 @@ export default function McpClientInstructions({ url, isLocalhost }: McpClientIns
 
       <Note>
         Any client that supports the MCP Streamable HTTP transport with OAuth can connect using the
-        URL above. Approved connections appear in the list and can be revoked at any time.
+        URL above. Approved connections appear in the list and can be revoked at any time. If your
+        project is served from several hostnames or behind a reverse proxy, set
+        <code className="font-mono"> NEXT_PUBLIC_MCP_SERVER_URL</code> to the public URL clients
+        should use.
       </Note>
     </div>
   );
