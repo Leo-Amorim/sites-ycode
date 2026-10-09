@@ -3,7 +3,7 @@
  * These are simplified versions focused on the MCP tool use case.
  */
 
-import type { Layer, DesignProperties, Breakpoint, UIState, CollectionFieldType, TranslationContentType } from '@/types';
+import type { Layer, DesignProperties, Breakpoint, UIState, CollectionFieldType, TranslationContentType, LinkSettings } from '@/types';
 import { generateId } from '@/lib/utils';
 import { markdownToTiptapJson } from '@/lib/markdown-to-tiptap';
 import {
@@ -41,6 +41,47 @@ export function updateLayerById(
     }
     return layer;
   });
+}
+
+export interface ImageUpdate {
+  /** New asset to display. Omit to keep the current image. */
+  asset_id?: string;
+  /** New alt text. Omit to keep the current alt. */
+  alt?: string;
+}
+
+/**
+ * Apply an image source and/or alt text change to a layer's image variable.
+ *
+ * Keeps whatever is not being changed, including a component-variable link
+ * (`src.id`) so updating the picture inside a component does not unlink it.
+ * Pass the result of this to `updateLayerById`.
+ */
+export function applyImageUpdate(layer: Layer, update: ImageUpdate): Layer {
+  const existing = layer.variables?.image;
+  const src = update.asset_id !== undefined
+    ? { type: 'asset' as const, ...(existing?.src?.id ? { id: existing.src.id } : {}), data: { asset_id: update.asset_id } }
+    : existing?.src;
+  const alt = update.alt !== undefined
+    ? { ...existing?.alt, type: 'dynamic_text' as const, data: { content: update.alt } }
+    : existing?.alt ?? { type: 'dynamic_text' as const, data: { content: '' } };
+
+  if (!src) {
+    // Alt-only update on a layer that has no image yet: nothing to attach the alt to.
+    return layer;
+  }
+
+  return {
+    ...layer,
+    variables: { ...layer.variables, image: { ...existing, src, alt } },
+  };
+}
+
+/** Human-readable summary of an image update for batch results. */
+export function describeImageUpdate(update: ImageUpdate): string {
+  if (update.asset_id !== undefined && update.alt !== undefined) return 'Set image and alt text';
+  if (update.alt !== undefined) return 'Set alt text';
+  return 'Set image';
 }
 
 export function insertLayer(
@@ -563,6 +604,108 @@ export function applyBackgroundImageDesign(layer: Layer): Layer {
   if (!bg.backgroundPosition) patch.backgroundPosition = 'center';
   if (!bg.backgroundRepeat) patch.backgroundRepeat = 'no-repeat';
   return applyDesignToLayer(layer, { backgrounds: patch });
+}
+
+// ── Shared layer-edit helpers (single tools + batch ops) ─────────────────────
+
+export interface BackgroundImageInput {
+  asset_id?: string;
+  url?: string;
+}
+
+/**
+ * Set a layer's background image from an asset or URL and make sure the
+ * design/classes render it. Returns the layer unchanged when neither is given.
+ */
+export function applyBackgroundImage(layer: Layer, input: BackgroundImageInput): Layer {
+  const src = input.asset_id
+    ? { type: 'asset' as const, data: { asset_id: input.asset_id } }
+    : input.url
+      ? { type: 'dynamic_text' as const, data: { content: input.url } }
+      : null;
+  if (!src) return layer;
+
+  return applyBackgroundImageDesign({
+    ...layer,
+    variables: { ...layer.variables, backgroundImage: { src } },
+  });
+}
+
+export interface LinkInput {
+  link_type: 'url' | 'email' | 'phone' | 'asset' | 'page';
+  url?: string;
+  page_id_target?: string;
+  collection_item_id?: string;
+  email?: string;
+  phone?: string;
+  asset_id?: string;
+  anchor_layer_id?: string;
+  target?: '_blank' | '_self' | '_parent' | '_top';
+  rel?: string;
+  download?: boolean;
+}
+
+/**
+ * Build the LinkSettings a layer stores from the agent-facing link fields.
+ * Pass `existing` to keep a component-variable link (`variable_id`) intact.
+ */
+export function buildLinkSettings(input: LinkInput, existing?: LinkSettings): LinkSettings {
+  const link: LinkSettings = { type: input.link_type };
+  if (input.link_type === 'url' && input.url) link.url = { type: 'dynamic_text', data: { content: input.url } };
+  if (input.link_type === 'email' && input.email) link.email = { type: 'dynamic_text', data: { content: input.email } };
+  if (input.link_type === 'phone' && input.phone) link.phone = { type: 'dynamic_text', data: { content: input.phone } };
+  if (input.link_type === 'asset' && input.asset_id) link.asset = { id: input.asset_id };
+  if (input.link_type === 'page' && input.page_id_target) {
+    link.page = input.collection_item_id
+      ? { id: input.page_id_target, collection_item_id: input.collection_item_id }
+      : { id: input.page_id_target };
+  }
+  if (input.anchor_layer_id) link.anchor_layer_id = input.anchor_layer_id;
+  if (input.target) link.target = input.target;
+  if (input.rel !== undefined) link.rel = input.rel;
+  if (input.download !== undefined) link.download = input.download;
+
+  // variable_id is a runtime extension on LinkSettings used by component linking.
+  const variableId = (existing as { variable_id?: string } | undefined)?.variable_id;
+  if (variableId) (link as LinkSettings & { variable_id?: string }).variable_id = variableId;
+
+  return link;
+}
+
+/** Summary for tool results, e.g. "Set page link". */
+export function describeLink(input: LinkInput): string {
+  return `Set ${input.link_type} link`;
+}
+
+export interface LayerSettingsInput {
+  tag?: string;
+  html_id?: string;
+  custom_name?: string;
+  hidden?: boolean;
+  keep_in_html?: boolean;
+  custom_attributes?: Record<string, string>;
+  html_embed_code?: string;
+}
+
+/**
+ * Apply the element-agnostic layer settings (tag, id, name, hidden, custom
+ * attributes, embed code). Element-specific settings (slider, lightbox, map,
+ * options source) are handled only by update_layer_settings.
+ */
+export function applyLayerSettings(layer: Layer, input: LayerSettingsInput): Layer {
+  const settings = { ...layer.settings };
+  if (input.tag) settings.tag = input.tag;
+  if (input.html_id) settings.id = input.html_id;
+  if (input.hidden !== undefined) settings.hidden = input.hidden;
+  if (input.keep_in_html !== undefined) settings.keepInHtml = input.keep_in_html;
+  if (input.custom_attributes) settings.customAttributes = { ...settings.customAttributes, ...input.custom_attributes };
+  if (input.html_embed_code !== undefined) settings.htmlEmbed = { ...settings.htmlEmbed, code: input.html_embed_code };
+
+  return {
+    ...layer,
+    settings,
+    ...(input.custom_name ? { customName: input.custom_name } : {}),
+  };
 }
 
 // ── Element Templates ────────────────────────────────────────────────────────

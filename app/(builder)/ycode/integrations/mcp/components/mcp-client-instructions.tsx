@@ -51,6 +51,14 @@ export default function McpClientInstructions({ url, isLocalhost }: McpClientIns
 
   const cursorConfig = JSON.stringify({ mcpServers: { ycode: { url } } }, null, 2);
 
+  const permissionsNote = (
+    <Note>
+      The first time the assistant uses a tool it asks for your permission. Choose{' '}
+      <strong>Always allow</strong> for the editing tools — every change is a draft until you
+      publish — and keep <strong>Publish</strong> and the delete tools on ask.
+    </Note>
+  );
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">
@@ -91,6 +99,7 @@ export default function McpClientInstructions({ url, isLocalhost }: McpClientIns
             Custom connectors require a paid Claude plan (Pro, Max, Team, or Enterprise). On Team
             and Enterprise plans an owner may need to add the connector for the organization.
           </Note>
+          {permissionsNote}
           {hostedOnlyNote}
         </TabsContent>
 
@@ -170,7 +179,9 @@ export default function McpClientInstructions({ url, isLocalhost }: McpClientIns
 
       <Note>
         Any client that supports the MCP Streamable HTTP transport with OAuth can connect using the
-        URL above. Approved connections appear in the list and can be revoked at any time. If your
+        URL above. Approved connections appear in the list and can be revoked at any time. Most
+        clients ask before the assistant edits anything; allowing the editing tools once is safe
+        because changes stay drafts until published. If your
         project is served from several hostnames or behind a reverse proxy, set
         <code className="font-mono"> NEXT_PUBLIC_MCP_SERVER_URL</code> to the public URL clients
         should use.

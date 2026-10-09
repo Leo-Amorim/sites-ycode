@@ -12,13 +12,26 @@ import {
   getTiptapTextContent,
   buildTiptapDoc,
   applyDesignToLayer,
+  applyImageUpdate,
+  describeImageUpdate,
+  applyBackgroundImage,
+  applyLayerSettings,
+  buildLinkSettings,
+  describeLink,
 } from '@/lib/mcp/utils';
 import type { RichTextBlock } from '@/lib/mcp/utils';
 import { getCachedLayers, saveCachedLayers } from '@/lib/mcp/page-layers';
 import { broadcastLayersChanged } from '@/lib/mcp/broadcast';
 import { lintDesign } from '@/lib/mcp/design-lint';
 import { collectFontFamiliesFromDesign, ensureFontsInstalled, fontWarnings } from '@/lib/mcp/font-install';
-import { designSchema, richTextBlockSchema, templateEnum } from './shared-schemas';
+import {
+  designSchema,
+  richTextBlockSchema,
+  templateEnum,
+  updateBackgroundImageOp,
+  updateLinkOp,
+  updateSettingsOp,
+} from './shared-schemas';
 
 /**
  * Delay between section reveals when streaming a batch onto the canvas. Long
@@ -72,7 +85,8 @@ const moveLayerOp = z.object({
 const updateImageOp = z.object({
   type: z.literal('update_image'),
   layer_id: z.string().describe('Layer ID or ref_id from a prior add_layer'),
-  asset_id: z.string().describe('Asset ID from upload_asset'),
+  asset_id: z.string().optional().describe('Asset ID from upload_asset. Omit to keep the current image and only change alt.'),
+  alt: z.string().optional().describe('Image alt text for accessibility. Omit to keep the current alt.'),
 });
 
 const applyStyleOp = z.object({
@@ -89,6 +103,7 @@ const setRichTextOp = z.object({
 
 const operationSchema = z.discriminatedUnion('type', [
   addLayerOp, updateDesignOp, updateTextOp, updateImageOp, deleteLayerOp, moveLayerOp, applyStyleOp, setRichTextOp,
+  updateLinkOp, updateSettingsOp, updateBackgroundImageOp,
 ]);
 
 function resolveId(id: string, refMap: Map<string, string>): string {
@@ -99,7 +114,14 @@ export function registerBatchTools(server: McpServer) {
   server.tool(
     'batch_operations',
     `Execute multiple layer operations in a single call. Fetches the layer tree
-once, applies all operations in order, then saves once. MUCH faster than individual tools.
+once, applies all operations in order, then saves once. MUCH faster than individual tools,
+and one call means one permission prompt in the user's AI client instead of one per edit.
+
+OPERATIONS: add_layer, update_design, update_text, set_rich_text, update_image, update_link,
+update_settings (tag, id, name, hidden, attributes, embed code), update_background_image,
+apply_style, move_layer, delete_layer. Use this whenever a turn touches two or more layers;
+the single-purpose tools are for one-off edits or element-specific settings (slider, lightbox,
+map, options source).
 
 Use ref_id in add_layer to name layers, then reference them in later operations.
 
@@ -213,21 +235,47 @@ EXAMPLE:
               const layerId = resolveId(op.layer_id, refMap);
               const layer = findLayerById(layers, layerId);
               if (!layer) { results.push({ op: i, status: 'error', detail: `Layer "${op.layer_id}" not found` }); continue; }
-              layers = updateLayerById(layers, layerId, (l) => {
-                const existing = (l.variables?.image || {}) as Record<string, unknown>;
-                return {
-                  ...l,
-                  variables: {
-                    ...l.variables,
-                    image: {
-                      ...existing,
-                      src: { type: 'asset' as const, data: { asset_id: op.asset_id } },
-                      alt: (existing.alt || { type: 'dynamic_text' as const, data: { content: '' } }) as { type: 'dynamic_text'; data: { content: string } },
-                    },
-                  },
-                };
-              });
-              results.push({ op: i, status: 'ok', detail: `Set image on "${layer.customName || layer.name}"` });
+              if (op.asset_id === undefined && op.alt === undefined) {
+                results.push({ op: i, status: 'error', detail: 'update_image needs asset_id and/or alt' });
+                continue;
+              }
+              if (op.asset_id === undefined && !layer.variables?.image?.src) {
+                results.push({ op: i, status: 'error', detail: `"${layer.customName || layer.name}" has no image yet — pass asset_id to set one before alt` });
+                continue;
+              }
+              layers = updateLayerById(layers, layerId, (l) => applyImageUpdate(l, op));
+              results.push({ op: i, status: 'ok', detail: `${describeImageUpdate(op)} on "${layer.customName || layer.name}"` });
+              break;
+            }
+
+            case 'update_link': {
+              const layerId = resolveId(op.layer_id, refMap);
+              const layer = findLayerById(layers, layerId);
+              if (!layer) { results.push({ op: i, status: 'error', detail: `Layer "${op.layer_id}" not found` }); continue; }
+              layers = updateLayerById(layers, layerId, (l) => ({
+                ...l,
+                variables: { ...l.variables, link: buildLinkSettings(op, l.variables?.link) },
+              }));
+              results.push({ op: i, status: 'ok', detail: `${describeLink(op)} on "${layer.customName || layer.name}"` });
+              break;
+            }
+
+            case 'update_settings': {
+              const layerId = resolveId(op.layer_id, refMap);
+              const layer = findLayerById(layers, layerId);
+              if (!layer) { results.push({ op: i, status: 'error', detail: `Layer "${op.layer_id}" not found` }); continue; }
+              layers = updateLayerById(layers, layerId, (l) => applyLayerSettings(l, op));
+              results.push({ op: i, status: 'ok', detail: `Updated settings on "${layer.customName || layer.name}"` });
+              break;
+            }
+
+            case 'update_background_image': {
+              const layerId = resolveId(op.layer_id, refMap);
+              const layer = findLayerById(layers, layerId);
+              if (!layer) { results.push({ op: i, status: 'error', detail: `Layer "${op.layer_id}" not found` }); continue; }
+              if (!op.asset_id && !op.url) { results.push({ op: i, status: 'error', detail: 'update_background_image needs asset_id or url' }); continue; }
+              layers = updateLayerById(layers, layerId, (l) => applyBackgroundImage(l, op));
+              results.push({ op: i, status: 'ok', detail: `Set background image on "${layer.customName || layer.name}"` });
               break;
             }
 
