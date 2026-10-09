@@ -35,8 +35,14 @@ function cleanupStaleSessions() {
   }
 }
 
-export async function authenticateToken(token: string): Promise<boolean> {
-  const cached = getCachedToken(token);
+/**
+ * Validate an MCP token for the deployment the request arrived on. The host
+ * header scopes the cache so a result for one site is never reused on another.
+ */
+export async function authenticateToken(token: string, request: Request): Promise<boolean> {
+  const host = request.headers.get('host') || '';
+
+  const cached = getCachedToken(host, token);
   if (cached) {
     return cached.valid;
   }
@@ -49,7 +55,7 @@ export async function authenticateToken(token: string): Promise<boolean> {
     valid = false;
   }
 
-  setCachedToken(token, valid);
+  setCachedToken(host, token, valid);
   return valid;
 }
 
