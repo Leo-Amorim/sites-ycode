@@ -77,6 +77,10 @@ export const TOOL_META: Record<string, ToolMeta> = {
   update_form_settings: write('Update form settings'),
   export_layer_html: read('Export layer as HTML'),
   update_layer_iframe: write('Update layer iframe'),
+  // Batches may contain delete_layer ops, but every op edits the page *draft* —
+  // nothing reaches the live site until `publish` (destructive). Marking the
+  // batch destructive would make every multi-edit turn look like a delete and
+  // push clients back to one prompt per edit, which is what batching avoids.
   batch_operations: write('Run batch layer operations'),
 
   // Layouts
