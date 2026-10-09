@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { validateToken } from '@/lib/repositories/mcpTokenRepository';
-import { createMcpServer } from '@/lib/mcp/server';
+import { createMcpServer, type CreateMcpServerOptions } from '@/lib/mcp/server';
 import { getCachedToken, setCachedToken } from '@/lib/mcp/token-cache';
 
 /**
@@ -73,8 +73,8 @@ export function addCorsHeaders(response: Response): Response {
   });
 }
 
-function createSessionTransport() {
-  const server = createMcpServer();
+function createSessionTransport(options?: CreateMcpServerOptions) {
+  const server = createMcpServer(options);
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: () => randomUUID(),
     enableJsonResponse: true,
@@ -157,7 +157,7 @@ function ensureAcceptHeader(request: Request): Request {
   });
 }
 
-async function handlePost(request: Request): Promise<Response> {
+async function handlePost(request: Request, options?: CreateMcpServerOptions): Promise<Response> {
   const normalized = ensureAcceptHeader(request);
   const sessionId = normalized.headers.get('mcp-session-id');
 
@@ -170,7 +170,7 @@ async function handlePost(request: Request): Promise<Response> {
   const body = await normalized.json();
   const isInit = !Array.isArray(body) && body.method === 'initialize';
 
-  const { server, transport } = createSessionTransport();
+  const { server, transport } = createSessionTransport(options);
   await server.connect(transport);
 
   if (isInit) {
@@ -195,10 +195,14 @@ async function handlePost(request: Request): Promise<Response> {
   return transport.handleRequest(actualReq, { parsedBody: body });
 }
 
-export async function handleMcpPost(request: Request): Promise<Response> {
+/**
+ * @param options - Forwarded to `createMcpServer` for new sessions (hosted
+ *   deployments use it to add tools / instructions without forking the handler).
+ */
+export async function handleMcpPost(request: Request, options?: CreateMcpServerOptions): Promise<Response> {
   cleanupStaleSessions();
   try {
-    const response = await handlePost(request);
+    const response = await handlePost(request, options);
     return addCorsHeaders(response);
   } catch (error) {
     console.error('[MCP POST] Error:', error);
