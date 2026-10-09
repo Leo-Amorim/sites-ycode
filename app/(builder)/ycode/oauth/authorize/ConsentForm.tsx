@@ -65,8 +65,11 @@ export default function ConsentForm(props: ConsentFormProps) {
   };
 
   let hostname = props.redirectUri;
+  let isLoopbackRedirect = false;
   try {
-    hostname = new URL(props.redirectUri).host;
+    const parsed = new URL(props.redirectUri);
+    hostname = parsed.host;
+    isLoopbackRedirect = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1' || parsed.hostname === '[::1]';
   } catch {
     // keep raw value on parse failure
   }
@@ -101,6 +104,11 @@ export default function ConsentForm(props: ConsentFormProps) {
 
         <div className="text-xs text-white/50 bg-white/5 px-3 py-2 rounded">
           Redirecting to <span className="text-white/80 font-mono">{hostname}</span>
+          {isLoopbackRedirect && (
+            <p className="mt-1">
+              This is an application running on your computer. Only approve if you started this connection yourself.
+            </p>
+          )}
         </div>
 
         {error && (

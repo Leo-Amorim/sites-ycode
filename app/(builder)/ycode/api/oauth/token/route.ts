@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { consumeCode, cleanupExpired } from '@/lib/repositories/mcpOAuthCodeRepository';
-import { cleanupOrphanClients, getClient } from '@/lib/repositories/mcpOAuthClientRepository';
+import { cleanupOrphanClients } from '@/lib/repositories/mcpOAuthClientRepository';
+import { resolveOAuthClient } from '@/lib/oauth/resolve-client';
 import {
   cleanupExpiredOAuthTokens,
   createOAuthToken,
@@ -151,7 +152,7 @@ async function handleAuthorizationCode(body: FormBody): Promise<Response> {
     return jsonError(400, 'invalid_grant', 'PKCE verification failed');
   }
 
-  const client = await getClient(stored.client_id);
+  const client = await resolveOAuthClient(stored.client_id);
   if (!client) {
     return jsonError(400, 'invalid_client', 'Client no longer exists');
   }
