@@ -21,6 +21,9 @@ import {
   applyDesignToLayer,
   applyImageUpdate,
   describeImageUpdate,
+  applyLayerSettings,
+  buildLinkSettings,
+  describeLink,
   generateId,
 } from '@/lib/mcp/utils';
 import type { RichTextBlock } from '@/lib/mcp/utils';
@@ -42,7 +45,7 @@ import {
   broadcastComponentDeleted,
   broadcastComponentLayersUpdated,
 } from '@/lib/mcp/broadcast';
-import { designSchema, richTextBlockSchema, templateEnum } from './shared-schemas';
+import { designSchema, richTextBlockSchema, templateEnum, updateLinkOp, updateSettingsOp } from './shared-schemas';
 
 const variableTypeEnum = z.enum(['text', 'rich_text', 'image', 'link', 'audio', 'video', 'icon', 'variant', 'visibility', 'id'])
   .describe('Variable type. "variant" lets instances pick which variant of a nested component is rendered. "visibility" is a boolean ({ visible: true|false }) that shows/hides the linked layer per instance. "id" is a string ({ id: "my-element" }) that sets the linked layer\'s HTML id attribute per instance (e.g. per-page tracking ids).');
@@ -755,6 +758,10 @@ the batch_operations equivalent for components — use it to build or change a c
 internal structure. Use ref_id in add_layer to name layers, then reference them in
 later operations (e.g. a follow-up update_design op to style a just-added layer).
 
+OPERATIONS: add_layer, update_design, update_text, set_rich_text, update_image (asset and/or
+alt), update_link, update_settings (tag, id, name, hidden, attributes, embed code), apply_style,
+move_layer, delete_layer, link_variable. Put every change to one component in a single call.
+
 LINKING VARIABLES: A component variable does nothing until it is linked to a layer. Link it
 by passing variable_id on the add_layer operation, or with a separate link_variable operation.
 The link target and shape are derived automatically from the variable's declared type (you do
@@ -832,6 +839,8 @@ Pass variant_id to target a specific named variant; omit it to update the primar
           variable_type: variableTypeEnum.default('text')
             .describe('Optional/legacy — the type is auto-detected from the variable definition. Ignored when the variable exists.'),
         }),
+        updateLinkOp,
+        updateSettingsOp,
       ])).min(1).max(50),
     },
     async ({ component_id, variant_id, operations }) => {
@@ -997,6 +1006,28 @@ Pass variant_id to target a specific named variant; omit it to update the primar
               if (!layer) { results.push({ op: i, status: 'error', detail: `Layer "${op.layer_id}" not found` }); continue; }
               layers = updateLayerById(layers, layerId, (l) => ({ ...l, styleId: op.style_id }));
               results.push({ op: i, status: 'ok', detail: `Applied style to "${layer.customName || layer.name}"` });
+              break;
+            }
+
+            case 'update_link': {
+              const layerId = refMap.get(op.layer_id) || op.layer_id;
+              const layer = findLayerById(layers, layerId);
+              if (!layer) { results.push({ op: i, status: 'error', detail: `Layer "${op.layer_id}" not found` }); continue; }
+              // buildLinkSettings keeps a linked component variable (variable_id) on the link.
+              layers = updateLayerById(layers, layerId, (l) => ({
+                ...l,
+                variables: { ...l.variables, link: buildLinkSettings(op, l.variables?.link) },
+              }));
+              results.push({ op: i, status: 'ok', detail: `${describeLink(op)} on "${layer.customName || layer.name}"` });
+              break;
+            }
+
+            case 'update_settings': {
+              const layerId = refMap.get(op.layer_id) || op.layer_id;
+              const layer = findLayerById(layers, layerId);
+              if (!layer) { results.push({ op: i, status: 'error', detail: `Layer "${op.layer_id}" not found` }); continue; }
+              layers = updateLayerById(layers, layerId, (l) => applyLayerSettings(l, op));
+              results.push({ op: i, status: 'ok', detail: `Updated settings on "${layer.customName || layer.name}"` });
               break;
             }
 

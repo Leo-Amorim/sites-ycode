@@ -14,13 +14,24 @@ import {
   applyDesignToLayer,
   applyImageUpdate,
   describeImageUpdate,
+  applyBackgroundImage,
+  applyLayerSettings,
+  buildLinkSettings,
+  describeLink,
 } from '@/lib/mcp/utils';
 import type { RichTextBlock } from '@/lib/mcp/utils';
 import { getCachedLayers, saveCachedLayers } from '@/lib/mcp/page-layers';
 import { broadcastLayersChanged } from '@/lib/mcp/broadcast';
 import { lintDesign } from '@/lib/mcp/design-lint';
 import { collectFontFamiliesFromDesign, ensureFontsInstalled, fontWarnings } from '@/lib/mcp/font-install';
-import { designSchema, richTextBlockSchema, templateEnum } from './shared-schemas';
+import {
+  designSchema,
+  richTextBlockSchema,
+  templateEnum,
+  updateBackgroundImageOp,
+  updateLinkOp,
+  updateSettingsOp,
+} from './shared-schemas';
 
 /**
  * Delay between section reveals when streaming a batch onto the canvas. Long
@@ -92,6 +103,7 @@ const setRichTextOp = z.object({
 
 const operationSchema = z.discriminatedUnion('type', [
   addLayerOp, updateDesignOp, updateTextOp, updateImageOp, deleteLayerOp, moveLayerOp, applyStyleOp, setRichTextOp,
+  updateLinkOp, updateSettingsOp, updateBackgroundImageOp,
 ]);
 
 function resolveId(id: string, refMap: Map<string, string>): string {
@@ -102,7 +114,14 @@ export function registerBatchTools(server: McpServer) {
   server.tool(
     'batch_operations',
     `Execute multiple layer operations in a single call. Fetches the layer tree
-once, applies all operations in order, then saves once. MUCH faster than individual tools.
+once, applies all operations in order, then saves once. MUCH faster than individual tools,
+and one call means one permission prompt in the user's AI client instead of one per edit.
+
+OPERATIONS: add_layer, update_design, update_text, set_rich_text, update_image, update_link,
+update_settings (tag, id, name, hidden, attributes, embed code), update_background_image,
+apply_style, move_layer, delete_layer. Use this whenever a turn touches two or more layers;
+the single-purpose tools are for one-off edits or element-specific settings (slider, lightbox,
+map, options source).
 
 Use ref_id in add_layer to name layers, then reference them in later operations.
 
@@ -226,6 +245,37 @@ EXAMPLE:
               }
               layers = updateLayerById(layers, layerId, (l) => applyImageUpdate(l, op));
               results.push({ op: i, status: 'ok', detail: `${describeImageUpdate(op)} on "${layer.customName || layer.name}"` });
+              break;
+            }
+
+            case 'update_link': {
+              const layerId = resolveId(op.layer_id, refMap);
+              const layer = findLayerById(layers, layerId);
+              if (!layer) { results.push({ op: i, status: 'error', detail: `Layer "${op.layer_id}" not found` }); continue; }
+              layers = updateLayerById(layers, layerId, (l) => ({
+                ...l,
+                variables: { ...l.variables, link: buildLinkSettings(op, l.variables?.link) },
+              }));
+              results.push({ op: i, status: 'ok', detail: `${describeLink(op)} on "${layer.customName || layer.name}"` });
+              break;
+            }
+
+            case 'update_settings': {
+              const layerId = resolveId(op.layer_id, refMap);
+              const layer = findLayerById(layers, layerId);
+              if (!layer) { results.push({ op: i, status: 'error', detail: `Layer "${op.layer_id}" not found` }); continue; }
+              layers = updateLayerById(layers, layerId, (l) => applyLayerSettings(l, op));
+              results.push({ op: i, status: 'ok', detail: `Updated settings on "${layer.customName || layer.name}"` });
+              break;
+            }
+
+            case 'update_background_image': {
+              const layerId = resolveId(op.layer_id, refMap);
+              const layer = findLayerById(layers, layerId);
+              if (!layer) { results.push({ op: i, status: 'error', detail: `Layer "${op.layer_id}" not found` }); continue; }
+              if (!op.asset_id && !op.url) { results.push({ op: i, status: 'error', detail: 'update_background_image needs asset_id or url' }); continue; }
+              layers = updateLayerById(layers, layerId, (l) => applyBackgroundImage(l, op));
+              results.push({ op: i, status: 'ok', detail: `Set background image on "${layer.customName || layer.name}"` });
               break;
             }
 

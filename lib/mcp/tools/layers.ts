@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type { DesignProperties, Layer, LinkSettings } from '@/types';
+import type { DesignProperties, Layer } from '@/types';
 import {
   findLayerById,
   updateLayerById,
@@ -12,8 +12,11 @@ import {
   getTiptapTextContent,
   buildTiptapDoc,
   applyDesignToLayer,
-  applyBackgroundImageDesign,
+  applyBackgroundImage,
   applyImageUpdate,
+  applyLayerSettings,
+  buildLinkSettings,
+  describeLink,
 } from '@/lib/mcp/utils';
 import type { RichTextBlock } from '@/lib/mcp/utils';
 import { layerToExportHtml } from '@/lib/html-layer-converter';
@@ -353,35 +356,20 @@ LINK TYPES:
       rel: z.string().optional().describe('rel attribute, e.g. "noopener noreferrer", "nofollow", "sponsored", "ugc"'),
       download: z.boolean().optional().describe('When true, instruct the browser to download the linked resource instead of navigating.'),
     },
-    async ({ page_id, layer_id, link_type, url, page_id_target, collection_item_id, email, phone, asset_id, anchor_layer_id, target, rel, download }) => {
+    async ({ page_id, layer_id, ...link }) => {
       const layers = await getPageLayers(page_id);
       const layer = findLayerById(layers, layer_id);
       if (!layer) {
         return { content: [{ type: 'text' as const, text: `Error: Layer "${layer_id}" not found.` }], isError: true };
       }
 
-      const link: LinkSettings = { type: link_type };
-      if (link_type === 'url' && url) link.url = { type: 'dynamic_text', data: { content: url } };
-      if (link_type === 'email' && email) link.email = { type: 'dynamic_text', data: { content: email } };
-      if (link_type === 'phone' && phone) link.phone = { type: 'dynamic_text', data: { content: phone } };
-      if (link_type === 'asset' && asset_id) link.asset = { id: asset_id };
-      if (link_type === 'page' && page_id_target) {
-        link.page = collection_item_id
-          ? { id: page_id_target, collection_item_id }
-          : { id: page_id_target };
-      }
-      if (anchor_layer_id) link.anchor_layer_id = anchor_layer_id;
-      if (target) link.target = target;
-      if (rel !== undefined) link.rel = rel;
-      if (download !== undefined) link.download = download;
-
       const updated = updateLayerById(layers, layer_id, (l) => ({
         ...l,
-        variables: { ...l.variables, link },
+        variables: { ...l.variables, link: buildLinkSettings(link, l.variables?.link) },
       }));
 
       await savePageLayers(page_id, updated);
-      return { content: [{ type: 'text' as const, text: `Set ${link_type} link on "${layer.customName || layer.name}"` }] };
+      return { content: [{ type: 'text' as const, text: `${describeLink(link)} on "${layer.customName || layer.name}"` }] };
     },
   );
 
@@ -442,17 +430,10 @@ LINK TYPES:
         return { content: [{ type: 'text' as const, text: 'Error: Provide either asset_id or url.' }], isError: true };
       }
 
-      const src = asset_id
-        ? { type: 'asset' as const, data: { asset_id } }
-        : { type: 'dynamic_text' as const, data: { content: url! } };
-
-      // Set the variable AND the design/classes that render it — the variable
+      // Sets the variable AND the design/classes that render it — the variable
       // alone only supplies the --bg-img value, nothing displays it without
       // the bg-[image:var(--bg-img)] class.
-      const updated = updateLayerById(layers, layer_id, (l) => applyBackgroundImageDesign({
-        ...l,
-        variables: { ...l.variables, backgroundImage: { src } },
-      }));
+      const updated = updateLayerById(layers, layer_id, (l) => applyBackgroundImage(l, { asset_id, url }));
 
       await savePageLayers(page_id, updated);
       const updatedLayer = findLayerById(updated, layer_id);
@@ -565,16 +546,12 @@ COMMON USES:
         return { content: [{ type: 'text' as const, text: `Error: Layer "${layer_id}" not found.` }], isError: true };
       }
 
-      const updated = updateLayerById(layers, layer_id, (l) => {
+      const updated = updateLayerById(layers, layer_id, (rawLayer) => {
+        // Element-agnostic settings share a helper with the batch `update_settings` op.
+        const l = applyLayerSettings(rawLayer, { tag, html_id, custom_name, hidden, keep_in_html, custom_attributes, html_embed_code });
         const settings = { ...l.settings };
-        if (tag) settings.tag = tag;
-        if (html_id) settings.id = html_id;
-        if (hidden !== undefined) settings.hidden = hidden;
-        if (keep_in_html !== undefined) settings.keepInHtml = keep_in_html;
         if (filter_on_change !== undefined) settings.filterOnChange = filter_on_change;
         if (is_placeholder !== undefined) settings.isPlaceholder = is_placeholder;
-        if (custom_attributes) settings.customAttributes = { ...settings.customAttributes, ...custom_attributes };
-        if (html_embed_code !== undefined) settings.htmlEmbed = { ...settings.htmlEmbed, code: html_embed_code };
         if (slider) {
           const existing = settings.slider || {} as Record<string, unknown>;
           settings.slider = {
@@ -650,11 +627,7 @@ COMMON USES:
           };
         }
 
-        return {
-          ...l,
-          settings,
-          ...(custom_name ? { customName: custom_name } : {}),
-        };
+        return { ...l, settings };
       });
 
       await savePageLayers(page_id, updated);
